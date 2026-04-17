@@ -268,7 +268,7 @@
   <div id="startup">
     <h1>APLAWS</h1>
     <p class="sub">Active Power Line Advisory Warning System</p>
-    <p>v4.1 — Local contrast wire scanning, sky zone guard, proximity scoring at 160 knots.</p>
+    <p>v4.3 — Local contrast wire scanning, sky zone guard, proximity scoring at 160 knots.</p>
     <div class="tag-row">
       <span class="tag">CATENARY DETECTION</span>
       <span class="tag new">NEW v2</span>
@@ -300,7 +300,7 @@
   <div id="top-bar">
     <div class="logo">
       <div class="dot" id="live-dot"></div>
-      APLAWS v4.1
+      APLAWS v4.3
     </div>
     <div id="status-text" class="clear">CLEAR</div>
   </div>
@@ -311,50 +311,59 @@
     <span id="alert-text">⚠ CABLE DETECTED — CAUTION</span>
   </div>
 
-  <!-- Bottom panel -->
+  <!-- Bottom panel v4.3 — cockpit-grade large touch targets -->
   <div id="bottom-panel">
+
     <div class="metrics">
-      <div class="metric">
-        <div class="label">Cables</div>
-        <div class="value" id="m-cables">0</div>
-      </div>
-      <div class="metric">
-        <div class="label">Threat</div>
-        <div class="value" id="m-threat">CLEAR</div>
-      </div>
-      <div class="metric">
-        <div class="label">T-Impact</div>
-        <div class="value" id="m-tti">--</div>
-      </div>
-      <div class="metric">
-        <div class="label">Sky% <span id="m-fps" style="font-size:8px;opacity:0.5"></span></div>
-        <div class="value" id="m-sky">--</div>
-      </div>
+      <div class="metric"><div class="label">Cables</div><div class="value" id="m-cables">0</div></div>
+      <div class="metric"><div class="label">Threat</div><div class="value" id="m-threat">CLEAR</div></div>
+      <div class="metric"><div class="label">T-Impact</div><div class="value" id="m-tti">--</div></div>
+      <div class="metric"><div class="label">Sky% <span id="m-fps" style="font-size:8px;opacity:0.5"></span></div><div class="value" id="m-sky">--</div></div>
     </div>
 
-    <div class="ctrl-row">
-      <label>SENSITIVITY</label>
-      <input type="range" id="sens-slider" min="1" max="10" value="5">
-      <span class="ctrl-val" id="sens-val">5</span>
-    </div>
-    <div class="ctrl-row">
-      <label>SKY THRESHOLD</label>
-      <input type="range" id="sky-slider" min="1" max="10" value="6">
-      <span class="ctrl-val" id="sky-val">6</span>
+    <!-- Flight phase — primary large buttons (fat-finger safe, min 56px tall) -->
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:7px">
+      <button id="mode-cruise" onclick="setFlightMode('cruise')"
+        style="padding:12px 4px;background:transparent;border:2px solid rgba(0,255,160,0.3);border-radius:8px;color:rgba(0,255,160,0.6);font-family:'Share Tech Mono',monospace;font-size:11px;font-weight:600;letter-spacing:1px;cursor:pointer;-webkit-tap-highlight-color:transparent;line-height:1.35;min-height:58px;text-align:center">
+        CRUISE<br><span style="font-size:9px;opacity:0.55;font-weight:400;letter-spacing:0.5px">sky zone on</span>
+      </button>
+      <button id="mode-tol" onclick="setFlightMode('tol')"
+        style="padding:12px 4px;background:rgba(0,255,160,0.12);border:2px solid var(--scan);border-radius:8px;color:var(--scan);font-family:'Share Tech Mono',monospace;font-size:11px;font-weight:600;letter-spacing:1px;cursor:pointer;-webkit-tap-highlight-color:transparent;line-height:1.35;min-height:58px;text-align:center">
+        T/O &middot; LDG<br><span style="font-size:9px;opacity:0.55;font-weight:400;letter-spacing:0.5px">full frame</span>
+      </button>
+      <button id="mode-night" onclick="setFlightMode('night')"
+        style="padding:12px 4px;background:transparent;border:2px solid rgba(0,255,160,0.3);border-radius:8px;color:rgba(0,255,160,0.6);font-family:'Share Tech Mono',monospace;font-size:11px;font-weight:600;letter-spacing:1px;cursor:pointer;-webkit-tap-highlight-color:transparent;line-height:1.35;min-height:58px;text-align:center">
+        NIGHT<br><span style="font-size:9px;opacity:0.55;font-weight:400;letter-spacing:0.5px">max sensitivity</span>
+      </button>
     </div>
 
-    <div style="display:flex;gap:6px;margin-bottom:10px">
-      <button onclick="applyPreset('day')" style="flex:1;padding:6px 2px;background:transparent;border:1px solid rgba(0,255,160,0.3);border-radius:5px;color:rgba(0,255,160,0.6);font-family:'Share Tech Mono',monospace;font-size:9px;letter-spacing:1px;cursor:pointer;-webkit-tap-highlight-color:transparent;">DAY</button>
-      <button onclick="applyPreset('haze')" style="flex:1;padding:6px 2px;background:transparent;border:1px solid rgba(0,255,160,0.3);border-radius:5px;color:rgba(0,255,160,0.6);font-family:'Share Tech Mono',monospace;font-size:9px;letter-spacing:1px;cursor:pointer;-webkit-tap-highlight-color:transparent;">HAZE</button>
-      <button onclick="applyPreset('dusk')" style="flex:1;padding:6px 2px;background:transparent;border:1px solid rgba(0,255,160,0.3);border-radius:5px;color:rgba(0,255,160,0.6);font-family:'Share Tech Mono',monospace;font-size:9px;letter-spacing:1px;cursor:pointer;-webkit-tap-highlight-color:transparent;">DUSK</button>
-      <button onclick="applyPreset('reset')" style="flex:1;padding:6px 2px;background:rgba(0,255,160,0.08);border:1px solid var(--scan);border-radius:5px;color:var(--scan);font-family:'Share Tech Mono',monospace;font-size:9px;letter-spacing:1px;cursor:pointer;-webkit-tap-highlight-color:transparent;">RESET</button>
+    <!-- Condition presets — secondary row -->
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:5px;margin-bottom:8px">
+      <button onclick="applyPreset('day')"   style="min-height:42px;padding:8px 2px;background:transparent;border:1px solid rgba(0,255,160,0.25);border-radius:6px;color:rgba(0,255,160,0.55);font-family:'Share Tech Mono',monospace;font-size:10px;letter-spacing:1px;cursor:pointer;-webkit-tap-highlight-color:transparent">DAY</button>
+      <button onclick="applyPreset('haze')"  style="min-height:42px;padding:8px 2px;background:transparent;border:1px solid rgba(0,255,160,0.25);border-radius:6px;color:rgba(0,255,160,0.55);font-family:'Share Tech Mono',monospace;font-size:10px;letter-spacing:1px;cursor:pointer;-webkit-tap-highlight-color:transparent">HAZE</button>
+      <button onclick="applyPreset('dusk')"  style="min-height:42px;padding:8px 2px;background:transparent;border:1px solid rgba(0,255,160,0.25);border-radius:6px;color:rgba(0,255,160,0.55);font-family:'Share Tech Mono',monospace;font-size:10px;letter-spacing:1px;cursor:pointer;-webkit-tap-highlight-color:transparent">DUSK</button>
+      <button onclick="applyPreset('reset')" style="min-height:42px;padding:8px 2px;background:rgba(0,255,160,0.07);border:1px solid var(--scan);border-radius:6px;color:var(--scan);font-family:'Share Tech Mono',monospace;font-size:10px;letter-spacing:1px;cursor:pointer;-webkit-tap-highlight-color:transparent">RESET</button>
     </div>
+
+    <!-- Sliders -->
+    <div class="ctrl-row" style="margin-bottom:7px">
+      <label>SENS</label>
+      <input type="range" id="sens-slider" min="1" max="10" value="8">
+      <span class="ctrl-val" id="sens-val">8</span>
+    </div>
+    <div class="ctrl-row" style="margin-bottom:10px">
+      <label>SKY</label>
+      <input type="range" id="sky-slider" min="1" max="10" value="2">
+      <span class="ctrl-val" id="sky-val">2</span>
+    </div>
+
+    <!-- START/STOP — biggest button, full width -->
     <button id="start-btn" onclick="toggleDetection()">START DETECTION</button>
+
   </div>
-</div>
 
 <script>
-// APLAWS v4.1 — Clean rebuild: local contrast scanning + sky zone guard
+// APLAWS v4.3 — Clean rebuild: local contrast scanning + sky zone guard
 // Built from V2 baseline. V3.x enhancements applied selectively.
 //
 // WHAT WORKS (proven by pixel analysis across all test images):
@@ -372,6 +381,7 @@ const PW=320,PH=240,SPEED_MS=82.3;
 let stream=null,detecting=false,animFrame=null;
 let lastTime=0,fpsSmooth=0,flashPhase=0;
 let skyTop=0,skyBot=120,skyValid=false;
+let flightMode='tol';
 
 const video=document.getElementById('video');
 const canvasP=document.getElementById('canvas-proc');
@@ -413,6 +423,45 @@ function applyPreset(name){
       setTimeout(()=>{b.style.color='';b.style.borderColor='';b.style.background='';},900);
     }
   });
+}
+
+// ─── Flight Mode ─────────────────────────────────────────────────
+// CRUISE  — sky zone active. Best for en-route flight with clear sky.
+//           Rejects ground/building false positives.
+// T/O·LDG — sky zone disabled, full-frame scan. For takeoff and landing
+//           where wires appear against buildings and complex backgrounds.
+//           Higher false positive risk — pilot awareness required.
+// NIGHT   — full-frame, maximum sensitivity, lower contrast threshold.
+//           For reduced visibility, dusk, dawn operations.
+function setFlightMode(mode){
+  flightMode=mode;
+  const modes=['cruise','tol','night'];
+  const ids=['mode-cruise','mode-tol','mode-night'];
+  ids.forEach((id,i)=>{
+    const btn=document.getElementById(id);
+    if(!btn)return;
+    const active=modes[i]===mode;
+    btn.style.background=active?'rgba(0,255,160,0.12)':'transparent';
+    btn.style.borderColor=active?'var(--scan)':'rgba(0,255,160,0.3)';
+    btn.style.color=active?'var(--scan)':'rgba(0,255,160,0.6)';
+  });
+  // Auto-adjust sensitivity and sky threshold per mode
+  if(mode==='cruise'){
+    document.getElementById('sens-slider').value=7;
+    document.getElementById('sens-val').textContent=7;
+    document.getElementById('sky-slider').value=6;
+    document.getElementById('sky-val').textContent=6;
+  } else if(mode==='tol'){
+    document.getElementById('sens-slider').value=8;
+    document.getElementById('sens-val').textContent=8;
+    document.getElementById('sky-slider').value=2; // low — accept any sky fragment
+    document.getElementById('sky-val').textContent=2;
+  } else if(mode==='night'){
+    document.getElementById('sens-slider').value=10;
+    document.getElementById('sens-val').textContent=10;
+    document.getElementById('sky-slider').value=1;
+    document.getElementById('sky-val').textContent=1;
+  }
 }
 
 // ─── Main Loop ────────────────────────────────────────────────────
@@ -464,23 +513,34 @@ function detectSkyZone(data){
     const aR=sumR/PW,aG=sumG/PW,aB=sumB/PW,aBr=(aR+aG+aB)/3;
     const isBlue=aB>aR*0.90&&aB>aG*0.88&&aBr>80;
     const isWhite=aBr>175&&Math.max(aR,aG,aB)-Math.min(aR,aG,aB)<40;
-    const isDusk=aBr>140&&aR<250&&aR<aG*1.35; // warm dusk sky (not red banner)
-    rowScore[y]=(isBlue||isWhite||isDusk)?1.0:(aBr>100?0.4:0);
+    const isDusk=aBr>140&&aR<250&&aR<aG*1.35&&aB>60;
+    // REJECT grey/neutral rows — road surfaces are grey and falsely match sky
+    // Real sky must have blue OR white dominance, not just brightness
+    const isGrey=Math.max(aR,aG,aB)-Math.min(aR,aG,aB)<25&&aBr<180;
+    rowScore[y]=(isGrey)?0:(isBlue||isWhite||isDusk)?1.0:0;
   }
 
+  // Find the FIRST contiguous sky band only — no re-entry after a gap.
+  // This prevents tree canopy and road surface from extending the zone.
   let top=-1,bot=0,gap=0;
   for(let y=0;y<PH;y++){
-    if(rowScore[y]>=minSkyScore){if(top<0)top=y;bot=y;gap=0;}
-    else if(top>=0){gap++;if(gap>12)break;} // reduced gap: stop sooner at sky/ground edge
+    if(rowScore[y]>=minSkyScore){
+      if(top<0)top=y;
+      bot=y;gap=0;
+    }else if(top>=0){
+      gap++;
+      if(gap>4)break; // stop after just 4 non-sky rows — no re-entry
+    }
   }
 
-  if(top<0||bot-top<8){
-    skyTop=0;skyBot=Math.floor(PH*0.45);skyValid=false;
+  // T/O·LDG and NIGHT modes: skip sky zone, scan full frame
+  if(flightMode==='tol'||flightMode==='night'){
+    skyTop=0; skyBot=PH-1; skyValid=true;
+  } else if(top<0||bot-top<8){
+    skyTop=0;skyBot=Math.floor(PH*0.4);skyValid=false;
   } else {
     skyTop=Math.max(0,top);
-    // NO extension below — stop exactly at last sky row
-    // Wires hang at sky boundary so are already included
-    skyBot=Math.min(PH-1,bot+3);
+    skyBot=Math.min(PH-1,bot+4);
     skyValid=true;
   }
 
@@ -502,7 +562,8 @@ function detectSkyZone(data){
 function findWires(gray){
   const sens=parseInt(document.getElementById('sens-slider').value);
   // Contrast gap: sens=7->8, sens=9->6, sens=10->5
-  const contrastThr=Math.max(4,13-sens);
+  // Night mode: lower contrast threshold to catch faint wires in low light
+  const contrastThr=flightMode==='night'?Math.max(3,10-sens):Math.max(4,13-sens);
   const WIN=7; // half-window px each side for background sample
   const minSpan=PW*0.15; // minimum wire span: 15% of frame = ~48px
 
@@ -578,7 +639,11 @@ function findWires(gray){
     const density=totalPts/(spanTotal*Math.max(1,cl.length));
     // Count gaps within runs
     const avgGaps=cl.reduce((s,r)=>s+(r.gaps||0),0)/cl.length;
-    if(density<0.20&&avgGaps>8)continue; // reject patchy vegetation
+    // T/O·LDG mode: stricter linearity needed (no sky zone guard)
+    // Require higher density to reject car/building edges
+    const minDensity=( flightMode==='tol'||flightMode==='night')?0.28:0.18;
+    const maxGapsTol=(flightMode==='tol'||flightMode==='night')?6:8;
+    if(density<minDensity&&avgGaps>maxGapsTol)continue;
     const yMid=Math.round(cl.reduce((s,r)=>s+r.y,0)/cl.length);
     const maxC=Math.max(...cl.map(r=>r.maxC));
     const avgC=cl.reduce((s,r)=>s+r.avgC,0)/cl.length;
