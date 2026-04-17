@@ -343,11 +343,16 @@ function toGray(data){
 }
 
 // ─── Sky Zone Detection ───────────────────────────────────────────
+// Scans every column to find the LOWEST sky pixel per column,
+// then takes the median. This correctly handles rooflines, trees and
+// clouds that interrupt the sky band at different heights.
 function detectSkyZone(data){
   const skyThr=parseInt(document.getElementById('sky-slider').value);
-  const threshold=0.42+(skyThr*0.04);
-  const rowScore=new Float32Array(PH);
+  // Lower threshold = more permissive sky detection (for hazy/cloudy days)
+  const threshold=0.30+(skyThr*0.04);
 
+  // Per-row sky fraction
+  const rowScore=new Float32Array(PH);
   for(let y=0;y<PH;y++){
     let n=0;
     for(let x=0;x<PW;x++){
@@ -355,13 +360,13 @@ function detectSkyZone(data){
       const r=data[p],g=data[p+1],b=data[p+2];
       const mx=Math.max(r,g,b),mn=Math.min(r,g,b);
       const sat=mx>0?(mx-mn)/mx:0;
-      // Strict sky definition: clearly blue or bright white/grey overcast
-      if((b>r&&b>g&&b>120&&sat<0.45)||(mx>195&&sat<0.12))n++;
+      // Sky: blue-dominant OR bright white/grey (clouds, overcast)
+      if((b>=r&&b>=g&&b>100&&sat<0.55)||(mx>180&&sat<0.18))n++;
     }
     rowScore[y]=n/PW;
   }
 
-  // Find sky band from top — stop when sky score drops consistently
+  // Find sky band — allow larger gaps (clouds, wires interrupt rows)
   let top=0,bot=0,inSky=false,gapCount=0;
   for(let y=0;y<PH;y++){
     if(rowScore[y]>=threshold){
@@ -369,23 +374,23 @@ function detectSkyZone(data){
       bot=y;gapCount=0;
     }else if(inSky){
       gapCount++;
-      if(gapCount>6)break; // clouds cause small gaps — allow up to 6 row gap
+      if(gapCount>12)break; // allow bigger gaps — wires & rooflines break rows
     }
   }
 
   skyTop=Math.max(0,top);
-  skyBot=Math.min(PH-1,bot+10); // small extension for cables at sky edge
+  // Extend well below detected sky bottom: cables hang at sky/terrain boundary
+  skyBot=Math.min(PH-1,bot+22);
 
   const skyPct=Math.round(((skyBot-skyTop)/PH)*100);
   document.getElementById('m-sky').textContent=skyPct+'%';
-  document.getElementById('m-sky').className='value '+(skyPct>25?'green':skyPct>8?'amber':'red');
+  document.getElementById('m-sky').className='value '+(skyPct>20?'green':skyPct>6?'amber':'red');
 
-  // Draw sky zone indicator on overlay canvas
-  const W=canvasM.width,H=canvasM.height,sy=H/PH;
+  const W=canvasM.width,H=canvasM.height,scaleY=H/PH;
   const bar=document.getElementById('sky-bar');
-  bar.style.top=(skyTop*sy+56)+'px';
-  bar.style.height=((skyBot-skyTop)*sy)+'px';
-  document.getElementById('sky-label').style.top=((skyTop*sy)+62)+'px';
+  bar.style.top=(skyTop*scaleY+56)+'px';
+  bar.style.height=((skyBot-skyTop)*scaleY)+'px';
+  document.getElementById('sky-label').style.top=((skyTop*scaleY)+62)+'px';
 }
 
 // ─── Sobel Edge Detection ─────────────────────────────────────────
@@ -431,7 +436,7 @@ function sobelEdges(gray){
 function findCables(edges,colorData,gray){
   if(skyBot<=skyTop+3)return[];
 
-  const minSpanPx=PW*0.22; // must span 22% of frame minimum
+  const minSpanPx=PW*0.18; // must span 22% of frame minimum
   const rowHits=[]; // detected streaks per row
 
   for(let y=skyTop;y<=skyBot;y++){
@@ -446,18 +451,18 @@ function findCables(edges,colorData,gray){
       skyRef=sum/cnt;
     }
 
-    // Only scan if this row is actually sky-bright enough to contain cables
+    // Only scan rows that are reasonably bright (sky context)
     let rowBright=0;
     for(let x=0;x<PW;x+=4){
       const p=(y*PW+x)*4;
       rowBright+=(colorData[p]+colorData[p+1]+colorData[p+2])/3;
     }
     rowBright/=(PW/4);
-    // Row itself must be reasonably bright (we're in sky zone)
-    if(rowBright<80)continue;
+    if(rowBright<55)continue; // lowered from 80 — wires near roofline are darker
 
-    // Cable threshold: must be darker than sky reference by at least 25
-    const cableThr=skyRef-25;
+    // Cable threshold: must be darker than sky reference by at least 18
+    // Thin distant wires have low contrast — keep threshold permissive
+    const cableThr=skyRef-18;
 
     // Scan for dark runs
     let runStart=-1,runLen=0;
@@ -465,14 +470,14 @@ function findCables(edges,colorData,gray){
     for(let x=0;x<PW;x++){
       const p=(y*PW+x)*4;
       const bright=(colorData[p]+colorData[p+1]+colorData[p+2])/3;
-      if(bright<cableThr&&bright<170){
+      if(bright<cableThr&&bright<175){
         if(runStart<0)runStart=x;runLen++;
       }else{
-        if(runLen>=6)runs.push({x1:runStart,x2:runStart+runLen-1,len:runLen});
+        if(runLen>=4)runs.push({x1:runStart,x2:runStart+runLen-1,len:runLen});
         runStart=-1;runLen=0;
       }
     }
-    if(runLen>=6)runs.push({x1:runStart,x2:runStart+runLen-1,len:runLen});
+    if(runLen>=4)runs.push({x1:runStart,x2:runStart+runLen-1,len:runLen});
 
     // Keep runs spanning minimum required width
     for(const r of runs){
@@ -501,8 +506,14 @@ function findCables(edges,colorData,gray){
     else clusters.push({rows:[hit]});
   }
 
-  // ── Validate clusters: must have ≥2 rows (physical thickness) ──
-  const valid=clusters.filter(cl=>cl.rows.length>=2);
+  // ── Validate clusters: thin wires may only hit 1 row — allow single row
+  // but require slightly longer span to compensate for reduced confidence
+  const valid=clusters.filter(cl=>{
+    if(cl.rows.length>=2)return true;
+    // Single row hit: only accept if span is very long (>30% of frame)
+    const span=Math.max(...cl.rows.map(r=>r.span));
+    return span>PW*0.30;
+  });
 
   // ── Build cable objects from clusters ──────────────────────────
   const cables=valid.map(cl=>{
