@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>APLAWS — Active Power Line Advisory Warning System v4.0</title>
+<title>APLAWS — Active Power Line Advisory Warning System v4.6</title>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&family=Share+Tech+Mono&display=swap');
 
@@ -268,7 +268,7 @@
   <div id="startup">
     <h1>APLAWS</h1>
     <p class="sub">Active Power Line Advisory Warning System</p>
-    <p>v4.4 — Local contrast wire scanning, sky zone guard, proximity scoring at 160 knots.</p>
+    <p>v4.6 — Local contrast wire scanning, temporal smoothing, audio alerts, sky zone guard, proximity scoring at 160 knots.</p>
     <div class="tag-row">
       <span class="tag">CATENARY DETECTION</span>
       <span class="tag new">NEW v2</span>
@@ -300,7 +300,7 @@
   <div id="top-bar">
     <div class="logo">
       <div class="dot" id="live-dot"></div>
-      APLAWS v4.5
+      APLAWS v4.6
     </div>
     <div id="status-text" class="clear">CLEAR</div>
   </div>
@@ -311,7 +311,7 @@
     <span id="alert-text">⚠ CABLE DETECTED — CAUTION</span>
   </div>
 
-  <!-- Bottom panel v4.4 — cockpit-grade large touch targets -->
+  <!-- Bottom panel v4.6 — cockpit-grade large touch targets -->
   <div id="bottom-panel">
 
     <div class="metrics">
@@ -363,7 +363,7 @@
   </div>
 
 <script>
-// APLAWS v4.5 — Clean rebuild: local contrast scanning + sky zone guard
+// APLAWS v4.6 — Clean rebuild: local contrast scanning + sky zone guard
 // Built from V2 baseline. V3.x enhancements applied selectively.
 //
 // WHAT WORKS (proven by pixel analysis across all test images):
@@ -425,6 +425,30 @@ function applyPreset(name){
   });
 }
 
+// ─── Temporal Smoothing ──────────────────────────────────────────
+// Wires detected on frame N are held for HOLD_FRAMES additional frames.
+// This prevents the alert from flickering off when a single frame misses
+// the wire due to motion blur, exposure change, or processing variance.
+function temporalSmooth(newCables){
+  // Add current frame to history
+  cableHistory.push({cables:newCables,age:0});
+  // Age all entries, remove old ones
+  cableHistory=cableHistory.filter(h=>{h.age++;return h.age<=HOLD_FRAMES;});
+  // Return the union of all cables within hold window, deduped
+  const all=[];
+  for(const h of cableHistory){
+    for(const c of h.cables){
+      // Only add if no similar cable already in 'all'
+      const dup=all.find(a=>Math.abs((a.y1+a.y2)/2-(c.y1+c.y2)/2)<12&&
+                             Math.abs(a.x1-c.x1)<PW*0.2);
+      if(!dup)all.push(c);
+    }
+  }
+  // Cap at 6
+  all.sort((a,b)=>(b._proxScore||0)-(a._proxScore||0));
+  return all.slice(0,6);
+}
+
 // ─── Flight Mode ─────────────────────────────────────────────────
 // CRUISE  — sky zone active. Best for en-route flight with clear sky.
 //           Rejects ground/building false positives.
@@ -476,7 +500,9 @@ function processFrame(timestamp){
   const imageData=ctxP.getImageData(0,0,PW,PH);
   const gray=buildGray(imageData.data);
   detectSkyZone(imageData.data);
-  const cables=findWires(gray,imageData.data);
+  const rawCables=findWires(gray,imageData.data);
+  // Temporal persistence: hold detections for 4 frames to smooth flicker
+  const cables=temporalSmooth(rawCables);
   renderOverlay(cables);
   setThreat(scoreThreat(cables),cables);
 }
@@ -488,7 +514,7 @@ function buildGray(data){
   return g;
 }
 
-// ─── Sky Zone Detection v4.1 ─────────────────────────────────────
+// ─── Sky Zone Detection v4.6 ─────────────────────────────────────
 // KEY FIX: Stop sky zone AT the last confirmed sky row, not 20px below.
 // The +20px extension was pulling the zone into hedge/fence rows, causing
 // false positives on vegetation edges. Wires at the sky/ground boundary
@@ -666,11 +692,11 @@ function findWires(gray,colorData){
     const rightCl=cl.filter(r=>r.x2>=x2-PW*0.2);
     const y1=leftCl.length?Math.round(leftCl.reduce((s,r)=>s+r.y,0)/leftCl.length):yMid;
     const y2=rightCl.length?Math.round(rightCl.reduce((s,r)=>s+r.y,0)/rightCl.length):yMid;
-    // THICKNESS FILTER: real wires are 1-4 rows thick.
-    // Vegetation bands, building edges, car roofs span many rows.
-    // Reject clusters spanning more than 8 rows vertically.
+    // THICKNESS FILTER: real wires are 1-6 rows thick at 320px scale.
+    // Vegetation/building bands span 10+ rows.
+    // Increased from 8 to 12 to reduce missed detections on marginal frames.
     const yThickness=cl[cl.length-1].y-cl[0].y;
-    if(yThickness>8)continue;
+    if(yThickness>12)continue;
     cables.push({x1,y1,x2,y2,_span:x2-x1,_contrast:avgC,_maxC:maxC,_rows:cl.length,_thickness:yThickness});
   }
 
@@ -758,7 +784,76 @@ function setThreat(level,cables){
   else if(level==='CAUTION'){statusEl.className='warn';statusEl.textContent='CAUTION';}
   else if(level==='ADVISORY'){statusEl.className='warn';statusEl.textContent='ADVISORY';}
   else{statusEl.className='clear';statusEl.textContent='CLEAR';}
+  // Audio alert
+  triggerAudio(level);
 }
+
+// ─── Audio Alert System ───────────────────────────────────────────
+// Uses Web Speech API (speechSynthesis) — no external files needed.
+// Speaks aviation-style callouts at appropriate threat levels.
+// Rate-limited to prevent continuous shouting.
+let lastSpokenLevel='CLEAR';
+let lastSpeakTime=0;
+let speaking=false;
+
+const AUDIO_COOLDOWN={
+  IMMINENT:1200, // repeat every 1.2s
+  CRITICAL:2500, // repeat every 2.5s
+  WARNING:5000,  // repeat every 5s
+  CAUTION:10000, // once per 10s
+  ADVISORY:20000,
+  CLEAR:0
+};
+const AUDIO_TEXT={
+  IMMINENT:'Pull up, pull up, cable',
+  CRITICAL:'Cable, evasive action',
+  WARNING:'Cable ahead, avoid',
+  CAUTION:'Cable caution',
+  ADVISORY:'Cable advisory',
+  CLEAR:null
+};
+
+function triggerAudio(level){
+  if(!detecting)return;
+  if(!AUDIO_TEXT[level])return;
+  const now=Date.now();
+  const cooldown=AUDIO_COOLDOWN[level]||10000;
+  if(now-lastSpeakTime<cooldown)return;
+  // Only speak if threat level is WARNING or above, or level changed up
+  const rank={CLEAR:0,ADVISORY:1,CAUTION:2,WARNING:3,CRITICAL:4,IMMINENT:5};
+  if((rank[level]||0)<2)return; // skip ADVISORY and CLEAR audio
+  speak(AUDIO_TEXT[level]);
+  lastSpeakTime=now;
+  lastSpokenLevel=level;
+}
+
+function speak(text){
+  if(!window.speechSynthesis)return;
+  // Cancel any current speech for IMMINENT/CRITICAL urgency
+  window.speechSynthesis.cancel();
+  const u=new SpeechSynthesisUtterance(text);
+  u.rate=0.95;    // slightly slower for clarity in cockpit noise
+  u.pitch=1.0;
+  u.volume=1.0;
+  // Try to get a clear male voice
+  const voices=window.speechSynthesis.getVoices();
+  const preferred=voices.find(v=>v.lang.startsWith('en')&&!v.name.includes('Female')&&!v.name.includes('Samantha'))
+    ||voices.find(v=>v.lang.startsWith('en'))
+    ||null;
+  if(preferred)u.voice=preferred;
+  window.speechSynthesis.speak(u);
+}
+
+// Pre-load voices on first user interaction (iOS requirement)
+document.addEventListener('touchstart',()=>{
+  if(window.speechSynthesis){
+    window.speechSynthesis.getVoices();
+    // iOS needs a silent utterance to unlock audio
+    const unlock=new SpeechSynthesisUtterance('');
+    unlock.volume=0;
+    window.speechSynthesis.speak(unlock);
+  }
+},{once:true});
 </script>
 </body>
 </html>
