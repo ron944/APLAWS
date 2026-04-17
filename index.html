@@ -268,7 +268,7 @@
   <div id="startup">
     <h1>APLAWS</h1>
     <p class="sub">Active Power Line Advisory Warning System</p>
-    <p>v4.3 — Local contrast wire scanning, sky zone guard, proximity scoring at 160 knots.</p>
+    <p>v4.4 — Local contrast wire scanning, sky zone guard, proximity scoring at 160 knots.</p>
     <div class="tag-row">
       <span class="tag">CATENARY DETECTION</span>
       <span class="tag new">NEW v2</span>
@@ -300,7 +300,7 @@
   <div id="top-bar">
     <div class="logo">
       <div class="dot" id="live-dot"></div>
-      APLAWS v4.3
+      APLAWS v4.5
     </div>
     <div id="status-text" class="clear">CLEAR</div>
   </div>
@@ -311,7 +311,7 @@
     <span id="alert-text">⚠ CABLE DETECTED — CAUTION</span>
   </div>
 
-  <!-- Bottom panel v4.3 — cockpit-grade large touch targets -->
+  <!-- Bottom panel v4.4 — cockpit-grade large touch targets -->
   <div id="bottom-panel">
 
     <div class="metrics">
@@ -363,7 +363,7 @@
   </div>
 
 <script>
-// APLAWS v4.3 — Clean rebuild: local contrast scanning + sky zone guard
+// APLAWS v4.5 — Clean rebuild: local contrast scanning + sky zone guard
 // Built from V2 baseline. V3.x enhancements applied selectively.
 //
 // WHAT WORKS (proven by pixel analysis across all test images):
@@ -476,7 +476,7 @@ function processFrame(timestamp){
   const imageData=ctxP.getImageData(0,0,PW,PH);
   const gray=buildGray(imageData.data);
   detectSkyZone(imageData.data);
-  const cables=findWires(gray);
+  const cables=findWires(gray,imageData.data);
   renderOverlay(cables);
   setThreat(scoreThreat(cables),cables);
 }
@@ -559,7 +559,7 @@ function detectSkyZone(data){
 // Scans every pixel in sky zone. A wire pixel is darker than its
 // immediate horizontal neighbours by at least `contrastThr`.
 // This handles: horizontal wires, diagonal wires, dusk low contrast.
-function findWires(gray){
+function findWires(gray,colorData){
   const sens=parseInt(document.getElementById('sens-slider').value);
   // Contrast gap: sens=7->8, sens=9->6, sens=10->5
   // Night mode: lower contrast threshold to catch faint wires in low light
@@ -572,10 +572,24 @@ function findWires(gray){
   const contrastMap=new Float32Array(PW*PH);
 
   for(let y=skyTop;y<=skyBot;y++){
-    // Skip very dark rows (status bar, shadow)
+    // ── Row qualification gate ──────────────────────────────────
+    // Use 88th-percentile brightness as background sky reference.
+    // Wires appear as dark pixels against a BRIGHT background.
+    // If the background itself is dark, we're looking at vegetation/ground
+    // not sky — wires won't be visible there anyway.
+    // p88 > 100 means the background is bright enough to contain wires.
+    // This rejects dark vegetation rows, shadow rows, and ground rows.
+    const rowPx=new Float32Array(PW);
     let rowBright=0;
-    for(let x=0;x<PW;x+=4)rowBright+=gray[y*PW+x];
-    if(rowBright/(PW/4)<45)continue;
+    for(let x=0;x<PW;x++){rowPx[x]=gray[y*PW+x];rowBright+=rowPx[x];}
+    rowBright/=PW;
+    if(rowBright<40)continue; // skip very dark rows (status bar etc)
+    // Sort to get 88th percentile (background sky brightness)
+    const sorted=rowPx.slice().sort();
+    const p88=sorted[Math.floor(PW*0.88)];
+    // Require bright background — wires are dark against bright sky/background
+    // p88 < 100 means the row background is too dark to contain visible wires
+    if(p88<100)continue;
 
     for(let x=WIN;x<PW-WIN;x++){
       // Local background: mean of WIN pixels each side
@@ -652,7 +666,12 @@ function findWires(gray){
     const rightCl=cl.filter(r=>r.x2>=x2-PW*0.2);
     const y1=leftCl.length?Math.round(leftCl.reduce((s,r)=>s+r.y,0)/leftCl.length):yMid;
     const y2=rightCl.length?Math.round(rightCl.reduce((s,r)=>s+r.y,0)/rightCl.length):yMid;
-    cables.push({x1,y1,x2,y2,_span:x2-x1,_contrast:avgC,_maxC:maxC,_rows:cl.length});
+    // THICKNESS FILTER: real wires are 1-4 rows thick.
+    // Vegetation bands, building edges, car roofs span many rows.
+    // Reject clusters spanning more than 8 rows vertically.
+    const yThickness=cl[cl.length-1].y-cl[0].y;
+    if(yThickness>8)continue;
+    cables.push({x1,y1,x2,y2,_span:x2-x1,_contrast:avgC,_maxC:maxC,_rows:cl.length,_thickness:yThickness});
   }
 
   cables.sort((a,b)=>b._span-a._span);
