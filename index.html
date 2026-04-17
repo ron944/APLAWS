@@ -3,158 +3,280 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>APLAWS — Active Power Line Advisory Warning System v3.6</title>
+<title>APLAWS — Active Power Line Advisory Warning System v2</title>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&family=Share+Tech+Mono&display=swap');
+
   :root {
-    --danger:#ff2d2d; --warn:#ff9500; --clear:#30d158;
-    --hud:rgba(0,255,160,0.85); --hud-dim:rgba(0,255,160,0.35);
-    --bg:#050a0e; --panel:rgba(5,20,15,0.88); --scan:#00ffa0;
+    --danger: #ff2d2d;
+    --warn: #ff9500;
+    --clear: #30d158;
+    --hud: rgba(0, 255, 160, 0.85);
+    --hud-dim: rgba(0, 255, 160, 0.35);
+    --bg: #050a0e;
+    --panel: rgba(5, 20, 15, 0.88);
+    --scan: #00ffa0;
   }
-  *{margin:0;padding:0;box-sizing:border-box;}
-  body{background:var(--bg);font-family:'Rajdhani',sans-serif;color:var(--scan);
-    overflow:hidden;height:100dvh;width:100vw;touch-action:none;}
-  #app{position:relative;width:100%;height:100%;}
-  #video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;z-index:0;}
-  #canvas-main{position:absolute;inset:0;width:100%;height:100%;z-index:1;pointer-events:none;}
 
-  .corner{position:absolute;width:36px;height:36px;border-color:var(--hud);
-    border-style:solid;opacity:0.6;z-index:2;pointer-events:none;}
-  .corner.tl{top:60px;left:12px;border-width:2px 0 0 2px;}
-  .corner.tr{top:60px;right:12px;border-width:2px 2px 0 0;}
-  .corner.bl{bottom:220px;left:12px;border-width:0 0 2px 2px;}
-  .corner.br{bottom:220px;right:12px;border-width:0 2px 2px 0;}
+  * { margin: 0; padding: 0; box-sizing: border-box; }
 
-  #top-bar{position:absolute;top:0;left:0;right:0;height:56px;background:var(--panel);
-    border-bottom:1px solid rgba(0,255,160,0.2);display:flex;align-items:center;
-    justify-content:space-between;padding:0 16px;z-index:10;
-    backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);}
-  .logo{font-family:'Share Tech Mono',monospace;font-size:13px;letter-spacing:2px;
-    color:var(--scan);display:flex;align-items:center;gap:8px;}
-  .logo .dot{width:7px;height:7px;border-radius:50%;background:var(--clear);
-    animation:pulse 1.4s ease-in-out infinite;}
-  #status-text{font-family:'Share Tech Mono',monospace;font-size:11px;letter-spacing:1px;
-    padding:4px 10px;border-radius:3px;border:1px solid;transition:all 0.3s;}
-  #status-text.clear{color:var(--clear);border-color:var(--clear);background:rgba(48,209,88,0.1);}
-  #status-text.warn{color:var(--warn);border-color:var(--warn);background:rgba(255,149,0,0.1);}
-  #status-text.danger{color:var(--danger);border-color:var(--danger);
-    background:rgba(255,45,45,0.15);animation:flashbg 0.4s ease-in-out infinite;}
+  body {
+    background: var(--bg);
+    font-family: 'Rajdhani', sans-serif;
+    color: var(--scan);
+    overflow: hidden;
+    height: 100dvh;
+    width: 100vw;
+    touch-action: none;
+  }
 
-  #alert-banner{position:absolute;top:56px;left:0;right:0;height:0;overflow:hidden;
-    z-index:10;transition:height 0.3s ease;display:flex;align-items:center;
-    justify-content:center;background:rgba(255,45,45,0.92);
-    backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);}
-  #alert-banner.visible{height:44px;}
-  #alert-banner span{font-family:'Share Tech Mono',monospace;font-size:14px;
-    font-weight:700;letter-spacing:3px;color:white;text-transform:uppercase;}
+  #app { position: relative; width: 100%; height: 100%; }
 
-  #bottom-panel{position:absolute;bottom:0;left:0;right:0;background:var(--panel);
-    border-top:1px solid rgba(0,255,160,0.2);
-    backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);
-    padding:10px 16px 28px;z-index:10;}
+  #video {
+    position: absolute; inset: 0;
+    width: 100%; height: 100%;
+    object-fit: cover; z-index: 0;
+  }
 
-  .metrics{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:10px;}
-  .metric{background:rgba(0,255,160,0.06);border:1px solid rgba(0,255,160,0.15);
-    border-radius:6px;padding:6px 8px;text-align:center;}
-  .metric .label{font-size:8px;letter-spacing:1.5px;color:var(--hud-dim);
-    text-transform:uppercase;font-family:'Share Tech Mono',monospace;}
-  .metric .value{font-family:'Share Tech Mono',monospace;font-size:17px;font-weight:600;
-    color:var(--scan);line-height:1.2;margin-top:1px;}
-  .metric .value.red{color:var(--danger);}
-  .metric .value.amber{color:var(--warn);}
-  .metric .value.green{color:var(--clear);}
+  #canvas-main {
+    position: absolute; inset: 0;
+    width: 100%; height: 100%;
+    z-index: 1; pointer-events: none;
+  }
 
-  .ctrl-row{display:flex;align-items:center;gap:10px;margin-bottom:8px;}
-  .ctrl-row label{font-size:10px;letter-spacing:1px;color:var(--hud-dim);
-    white-space:nowrap;font-family:'Share Tech Mono',monospace;min-width:85px;}
-  input[type=range]{flex:1;-webkit-appearance:none;height:3px;
-    background:rgba(0,255,160,0.2);border-radius:2px;outline:none;}
-  input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:18px;height:18px;
-    border-radius:50%;background:var(--scan);cursor:pointer;}
-  .ctrl-val{font-family:'Share Tech Mono',monospace;font-size:12px;color:var(--scan);
-    min-width:32px;text-align:right;}
+  /* Corner brackets */
+  .corner {
+    position: absolute; width: 36px; height: 36px;
+    border-color: var(--hud); border-style: solid; opacity: 0.6;
+    z-index: 2; pointer-events: none;
+  }
+  .corner.tl { top: 60px; left: 12px; border-width: 2px 0 0 2px; }
+  .corner.tr { top: 60px; right: 12px; border-width: 2px 2px 0 0; }
+  .corner.bl { bottom: 210px; left: 12px; border-width: 0 0 2px 2px; }
+  .corner.br { bottom: 210px; right: 12px; border-width: 0 2px 2px 0; }
 
-  /* Mode toggle */
-  .mode-row{display:flex;gap:6px;margin-bottom:10px;}
-  .mode-btn{flex:1;padding:7px 4px;background:transparent;
-    border:1px solid rgba(0,255,160,0.25);border-radius:5px;
-    color:rgba(0,255,160,0.45);font-family:'Share Tech Mono',monospace;
-    font-size:9px;letter-spacing:1px;cursor:pointer;text-transform:uppercase;
-    -webkit-tap-highlight-color:transparent;transition:all 0.2s;}
-  .mode-btn.active{border-color:var(--scan);color:var(--scan);
-    background:rgba(0,255,160,0.08);}
+  /* Top bar */
+  #top-bar {
+    position: absolute; top: 0; left: 0; right: 0; height: 56px;
+    background: var(--panel);
+    border-bottom: 1px solid rgba(0,255,160,0.2);
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0 16px; z-index: 10;
+    backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+  }
 
-  #start-btn{display:block;width:100%;padding:13px;background:transparent;
-    border:1.5px solid var(--scan);border-radius:6px;color:var(--scan);
-    font-family:'Rajdhani',sans-serif;font-size:15px;font-weight:600;
-    letter-spacing:3px;text-transform:uppercase;cursor:pointer;
-    transition:background 0.2s;pointer-events:all;
-    -webkit-tap-highlight-color:transparent;}
-  #start-btn:active{background:rgba(0,255,160,0.15);}
-  #start-btn.running{border-color:var(--danger);color:var(--danger);}
+  .logo {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 13px; letter-spacing: 2px; color: var(--scan);
+    display: flex; align-items: center; gap: 8px;
+  }
+  .logo .dot {
+    width: 7px; height: 7px; border-radius: 50%;
+    background: var(--clear); animation: pulse 1.4s ease-in-out infinite;
+  }
 
-  /* Sky zone indicator */
-  #sky-bar{position:absolute;left:12px;right:12px;border:1px dashed rgba(0,200,255,0.3);
-    border-radius:3px;z-index:3;pointer-events:none;transition:top 0.5s,height 0.5s;}
-  #sky-label{position:absolute;left:16px;font-family:'Share Tech Mono',monospace;
-    font-size:9px;letter-spacing:1px;color:rgba(0,200,255,0.5);z-index:3;
-    pointer-events:none;}
+  #status-text {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 11px; letter-spacing: 1px;
+    padding: 4px 10px; border-radius: 3px; border: 1px solid;
+    transition: all 0.3s;
+  }
+  #status-text.clear  { color: var(--clear); border-color: var(--clear); background: rgba(48,209,88,0.1); }
+  #status-text.warn   { color: var(--warn);  border-color: var(--warn);  background: rgba(255,149,0,0.1); }
+  #status-text.danger { color: var(--danger); border-color: var(--danger); background: rgba(255,45,45,0.15); animation: flashbg 0.4s ease-in-out infinite; }
 
-  #startup{position:absolute;inset:0;background:var(--bg);z-index:100;
-    display:flex;flex-direction:column;align-items:center;justify-content:center;
-    gap:18px;padding:28px;transition:opacity 0.5s;}
-  #startup h1{font-family:'Share Tech Mono',monospace;font-size:28px;letter-spacing:6px;
-    color:var(--scan);text-align:center;}
-  .sub{font-size:11px;letter-spacing:2px;color:rgba(0,255,160,0.4);
-    text-align:center;margin-top:-10px;font-family:'Share Tech Mono',monospace;}
-  #startup p{font-size:13px;color:rgba(0,255,160,0.55);text-align:center;
-    line-height:1.6;letter-spacing:0.3px;}
-  .tag-row{display:flex;gap:6px;flex-wrap:wrap;justify-content:center;}
-  .tag{font-family:'Share Tech Mono',monospace;font-size:9px;letter-spacing:1px;
-    padding:3px 8px;border:1px solid rgba(0,255,160,0.3);border-radius:3px;
-    color:rgba(0,255,160,0.6);}
-  .tag.new{border-color:var(--warn);color:var(--warn);}
-  .tag.blue{border-color:rgba(0,200,255,0.5);color:rgba(0,200,255,0.7);}
-  .warn-box{border:1px solid var(--warn);border-radius:6px;padding:12px 16px;
-    background:rgba(255,149,0,0.07);width:100%;}
-  .warn-box p{color:var(--warn);font-size:12px;line-height:1.5;}
-  #launch-btn{width:100%;max-width:300px;padding:16px;background:var(--scan);
-    border:none;border-radius:6px;color:#050a0e;font-family:'Rajdhani',sans-serif;
-    font-size:16px;font-weight:700;letter-spacing:3px;text-transform:uppercase;
-    cursor:pointer;-webkit-tap-highlight-color:transparent;}
+  /* Alert banner */
+  #alert-banner {
+    position: absolute; top: 56px; left: 0; right: 0;
+    height: 0; overflow: hidden; z-index: 10;
+    transition: height 0.3s ease;
+    display: flex; align-items: center; justify-content: center;
+    background: rgba(255,45,45,0.92);
+    backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px);
+  }
+  #alert-banner.visible { height: 44px; }
+  #alert-banner span {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 14px; font-weight: 700;
+    letter-spacing: 3px; color: white; text-transform: uppercase;
+  }
 
-  #scan-line{position:absolute;left:12px;right:12px;height:1px;
-    background:linear-gradient(90deg,transparent,var(--scan),transparent);
-    opacity:0.35;z-index:3;animation:scanMove 3s linear infinite;pointer-events:none;}
-  #threat-ring{position:absolute;border-radius:50%;border:2px solid var(--danger);
-    pointer-events:none;opacity:0;transform:translate(-50%,-50%);
-    transition:opacity 0.2s;z-index:4;}
-  #threat-ring.visible{opacity:0.8;animation:ringPulse 0.7s ease-out infinite;}
+  /* Bottom panel */
+  #bottom-panel {
+    position: absolute; bottom: 0; left: 0; right: 0;
+    background: var(--panel);
+    border-top: 1px solid rgba(0,255,160,0.2);
+    backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+    padding: 10px 16px 28px; z-index: 10;
+  }
 
-  @keyframes pulse{0%,100%{opacity:1;transform:scale(1);}50%{opacity:0.4;transform:scale(0.8);}}
-  @keyframes flashbg{0%,100%{background:rgba(255,45,45,0.15);}50%{background:rgba(255,45,45,0.35);}}
-  @keyframes scanMove{0%{top:60px;}100%{top:calc(100% - 220px);}}
-  @keyframes ringPulse{0%{transform:translate(-50%,-50%) scale(1);opacity:0.8;}
-    100%{transform:translate(-50%,-50%) scale(1.5);opacity:0;}}
-  @keyframes fadeOut{to{opacity:0;pointer-events:none;}}
+  .metrics {
+    display: grid; grid-template-columns: repeat(4, 1fr);
+    gap: 6px; margin-bottom: 10px;
+  }
+
+  .metric {
+    background: rgba(0,255,160,0.06);
+    border: 1px solid rgba(0,255,160,0.15);
+    border-radius: 6px; padding: 6px 8px; text-align: center;
+  }
+  .metric .label {
+    font-size: 8px; letter-spacing: 1.5px; color: var(--hud-dim);
+    text-transform: uppercase; font-family: 'Share Tech Mono', monospace;
+  }
+  .metric .value {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 17px; font-weight: 600; color: var(--scan);
+    line-height: 1.2; margin-top: 1px;
+  }
+  .metric .value.red   { color: var(--danger); }
+  .metric .value.amber { color: var(--warn); }
+  .metric .value.green { color: var(--clear); }
+
+  .ctrl-row {
+    display: flex; align-items: center; gap: 10px; margin-bottom: 8px;
+  }
+  .ctrl-row label {
+    font-size: 10px; letter-spacing: 1px; color: var(--hud-dim);
+    white-space: nowrap; font-family: 'Share Tech Mono', monospace;
+    min-width: 80px;
+  }
+  input[type=range] {
+    flex: 1; -webkit-appearance: none;
+    height: 3px; background: rgba(0,255,160,0.2);
+    border-radius: 2px; outline: none;
+  }
+  input[type=range]::-webkit-slider-thumb {
+    -webkit-appearance: none; width: 18px; height: 18px;
+    border-radius: 50%; background: var(--scan); cursor: pointer;
+  }
+  .ctrl-val {
+    font-family: 'Share Tech Mono', monospace; font-size: 12px;
+    color: var(--scan); min-width: 32px; text-align: right;
+  }
+
+  #start-btn {
+    display: block; width: 100%; padding: 13px;
+    background: transparent; border: 1.5px solid var(--scan);
+    border-radius: 6px; color: var(--scan);
+    font-family: 'Rajdhani', sans-serif; font-size: 15px;
+    font-weight: 600; letter-spacing: 3px; text-transform: uppercase;
+    cursor: pointer; transition: background 0.2s;
+    margin-bottom: 0; pointer-events: all;
+    -webkit-tap-highlight-color: transparent;
+  }
+  #start-btn:active { background: rgba(0,255,160,0.15); }
+  #start-btn.running { border-color: var(--danger); color: var(--danger); }
+
+  /* Startup screen */
+  #startup {
+    position: absolute; inset: 0; background: var(--bg);
+    z-index: 100; display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    gap: 20px; padding: 32px; transition: opacity 0.5s;
+  }
+  #startup h1 {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 28px; letter-spacing: 6px; color: var(--scan);
+    text-align: center;
+  }
+  #startup .sub {
+    font-size: 11px; letter-spacing: 2px;
+    color: rgba(0,255,160,0.45); text-align: center; margin-top: -12px;
+    font-family: 'Share Tech Mono', monospace;
+  }
+  #startup p {
+    font-size: 14px; color: rgba(0,255,160,0.55);
+    text-align: center; line-height: 1.6; letter-spacing: 0.3px;
+  }
+  .tag-row {
+    display: flex; gap: 8px; flex-wrap: wrap; justify-content: center;
+  }
+  .tag {
+    font-family: 'Share Tech Mono', monospace; font-size: 10px;
+    letter-spacing: 1px; padding: 4px 10px;
+    border: 1px solid rgba(0,255,160,0.3); border-radius: 3px;
+    color: rgba(0,255,160,0.6);
+  }
+  .tag.new { border-color: var(--warn); color: var(--warn); }
+  .warn-box {
+    border: 1px solid var(--warn); border-radius: 6px;
+    padding: 12px 16px; background: rgba(255,149,0,0.07); width: 100%;
+  }
+  .warn-box p { color: var(--warn); font-size: 12px; line-height: 1.5; }
+  #launch-btn {
+    width: 100%; max-width: 300px; padding: 16px;
+    background: var(--scan); border: none; border-radius: 6px;
+    color: #050a0e; font-family: 'Rajdhani', sans-serif;
+    font-size: 16px; font-weight: 700; letter-spacing: 3px;
+    text-transform: uppercase; cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  /* Scan line */
+  #scan-line {
+    position: absolute; left: 12px; right: 12px; height: 1px;
+    background: linear-gradient(90deg, transparent, var(--scan), transparent);
+    opacity: 0.4; z-index: 3;
+    animation: scanMove 3s linear infinite; pointer-events: none;
+  }
+
+  /* Threat ring */
+  #threat-ring {
+    position: absolute; border-radius: 50%;
+    border: 2px solid var(--danger); pointer-events: none;
+    opacity: 0; transform: translate(-50%, -50%);
+    transition: opacity 0.2s; z-index: 4;
+  }
+  #threat-ring.visible {
+    opacity: 0.8; animation: ringPulse 0.7s ease-out infinite;
+  }
+
+  /* Debug overlay toggle */
+  #debug-btn {
+    position: absolute; top: 16px; right: 70px;
+    font-family: 'Share Tech Mono', monospace; font-size: 9px;
+    letter-spacing: 1px; padding: 3px 7px;
+    border: 1px solid rgba(0,255,160,0.25); border-radius: 3px;
+    color: rgba(0,255,160,0.4); background: transparent;
+    cursor: pointer; z-index: 11;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  @keyframes pulse {
+    0%,100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.4; transform: scale(0.8); }
+  }
+  @keyframes flashbg {
+    0%,100% { background: rgba(255,45,45,0.15); }
+    50% { background: rgba(255,45,45,0.35); }
+  }
+  @keyframes scanMove {
+    0% { top: 60px; } 100% { top: calc(100% - 210px); }
+  }
+  @keyframes ringPulse {
+    0% { transform: translate(-50%,-50%) scale(1); opacity: 0.8; }
+    100% { transform: translate(-50%,-50%) scale(1.5); opacity: 0; }
+  }
+  @keyframes fadeOut { to { opacity: 0; pointer-events: none; } }
 </style>
 </head>
 <body>
 <div id="app">
 
+  <!-- Startup -->
   <div id="startup">
     <h1>APLAWS</h1>
     <p class="sub">Active Power Line Advisory Warning System</p>
-    <p>v3.6 — Percentile-based wire detection, improved sky zone classification, and proximity threat assessment at 160 knots.</p>
+    <p>Catenary curve detection engine v2.0 — identifies the natural sag signature of suspended cables, rejecting fences, buildings and vegetation.</p>
     <div class="tag-row">
-      <span class="tag blue">SKY DETECTION</span>
-      <span class="tag new">v3.6</span>
-      <span class="tag">MOTION ANALYSIS</span>
-      <span class="tag">CATENARY FIT</span>
-      <span class="tag">TAUT WIRE MODE</span>
+      <span class="tag">CATENARY DETECTION</span>
+      <span class="tag new">NEW v2</span>
+      <span class="tag">CURVE FITTING</span>
+      <span class="tag">FALSE-POSITIVE FILTER</span>
     </div>
     <div class="warn-box">
-      <p>⚠ PROTOTYPE — RESEARCH USE ONLY<br>Not certified for aviation use. Always follow official procedures.</p>
+      <p>⚠ PROTOTYPE — RESEARCH USE ONLY<br>Not certified for operational aviation use. Always follow official procedures.</p>
     </div>
     <button id="launch-btn" onclick="launchApp()">ACTIVATE SYSTEM</button>
   </div>
@@ -163,56 +285,60 @@
   <canvas id="canvas-proc" style="display:none"></canvas>
   <canvas id="canvas-main"></canvas>
 
-  <div class="corner tl"></div><div class="corner tr"></div>
-  <div class="corner bl"></div><div class="corner br"></div>
+  <!-- HUD corners -->
+  <div class="corner tl"></div>
+  <div class="corner tr"></div>
+  <div class="corner bl"></div>
+  <div class="corner br"></div>
+
   <div id="scan-line"></div>
   <div id="threat-ring"></div>
-  <div id="sky-bar"></div>
-  <div id="sky-label">SKY ZONE</div>
 
+  <!-- Top bar -->
   <div id="top-bar">
-    <div class="logo"><div class="dot" id="live-dot"></div>APLAWS v3.6</div>
+    <div class="logo">
+      <div class="dot" id="live-dot"></div>
+      APLAWS v2.0
+    </div>
     <div id="status-text" class="clear">CLEAR</div>
   </div>
+  <button id="debug-btn" onclick="toggleDebug()">DEBUG</button>
 
-  <div id="alert-banner"><span id="alert-text">⚠ CABLE DETECTED</span></div>
+  <!-- Alert banner -->
+  <div id="alert-banner">
+    <span id="alert-text">⚠ CABLE DETECTED — CAUTION</span>
+  </div>
 
+  <!-- Bottom panel -->
   <div id="bottom-panel">
     <div class="metrics">
-      <div class="metric"><div class="label">Cables</div><div class="value" id="m-cables">0</div></div>
-      <div class="metric"><div class="label">Threat</div><div class="value" id="m-threat">LOW</div></div>
-      <div class="metric"><div class="label">T-Impact</div><div class="value" id="m-tti">--</div></div>
-      <div class="metric"><div class="label">Sky%</div><div class="value" id="m-sky">--</div></div>
-    </div>
-
-    <div class="mode-row">
-      <button class="mode-btn active" id="btn-auto"   onclick="setMode('auto')">AUTO</button>
-      <button class="mode-btn"        id="btn-sky"    onclick="setMode('sky')">SKY ONLY</button>
-      <button class="mode-btn"        id="btn-motion" onclick="setMode('motion')">MOTION</button>
-      <button class="mode-btn"        id="btn-taut"   onclick="setMode('taut')">TAUT</button>
+      <div class="metric">
+        <div class="label">Cables</div>
+        <div class="value" id="m-cables">0</div>
+      </div>
+      <div class="metric">
+        <div class="label">Threat</div>
+        <div class="value" id="m-threat">LOW</div>
+      </div>
+      <div class="metric">
+        <div class="label">Sag</div>
+        <div class="value" id="m-sag">--</div>
+      </div>
+      <div class="metric">
+        <div class="label">FPS</div>
+        <div class="value" id="m-fps">--</div>
+      </div>
     </div>
 
     <div class="ctrl-row">
       <label>SENSITIVITY</label>
-      <input type="range" id="sens-slider" min="1" max="10" value="8">
-      <span class="ctrl-val" id="sens-val">8</span>
+      <input type="range" id="sens-slider" min="1" max="10" value="5">
+      <span class="ctrl-val" id="sens-val">5</span>
     </div>
     <div class="ctrl-row">
-      <label>SKY THRESHOLD</label>
-      <input type="range" id="sky-slider" min="1" max="10" value="7">
-      <span class="ctrl-val" id="sky-val">7</span>
-    </div>
-    <div class="ctrl-row" style="margin-bottom:10px">
       <label>SAG TOLERANCE</label>
-      <input type="range" id="sag-slider" min="1" max="15" value="2">
-      <span class="ctrl-val" id="sag-val">2px</span>
-    </div>
-
-    <div style="display:flex;gap:6px;margin-bottom:10px;">
-      <button onclick="applyPreset('day')" style="flex:1;padding:6px 2px;background:transparent;border:1px solid rgba(0,255,160,0.3);border-radius:5px;color:rgba(0,255,160,0.6);font-family:'Share Tech Mono',monospace;font-size:9px;letter-spacing:1px;cursor:pointer;-webkit-tap-highlight-color:transparent;">DAY</button>
-      <button onclick="applyPreset('haze')" style="flex:1;padding:6px 2px;background:transparent;border:1px solid rgba(0,255,160,0.3);border-radius:5px;color:rgba(0,255,160,0.6);font-family:'Share Tech Mono',monospace;font-size:9px;letter-spacing:1px;cursor:pointer;-webkit-tap-highlight-color:transparent;">HAZE</button>
-      <button onclick="applyPreset('dusk')" style="flex:1;padding:6px 2px;background:transparent;border:1px solid rgba(0,255,160,0.3);border-radius:5px;color:rgba(0,255,160,0.6);font-family:'Share Tech Mono',monospace;font-size:9px;letter-spacing:1px;cursor:pointer;-webkit-tap-highlight-color:transparent;">DUSK</button>
-      <button onclick="applyPreset('reset')" style="flex:1;padding:6px 2px;background:rgba(0,255,160,0.08);border:1px solid var(--scan);border-radius:5px;color:var(--scan);font-family:'Share Tech Mono',monospace;font-size:9px;letter-spacing:1px;cursor:pointer;-webkit-tap-highlight-color:transparent;">RESET</button>
+      <input type="range" id="sag-slider" min="1" max="15" value="6">
+      <span class="ctrl-val" id="sag-val">6px</span>
     </div>
 
     <button id="start-btn" onclick="toggleDetection()">START DETECTION</button>
@@ -220,318 +346,427 @@
 </div>
 
 <script>
-// APLAWS v3.6 — Direct local-contrast wire scanning (no Hough)
-// Proven by pixel analysis to detect wires in all test images
-const PW=320,PH=240;
-const SPEED_MS=82.3;
+// ─── State ────────────────────────────────────────────────────────
+let stream = null, detecting = false, animFrame = null;
+let lastTime = 0, fpsSmooth = 0;
+let threatLevel = 'LOW';
+let showDebug = false;
+let confirmedCables = [];
 
-let stream=null,detecting=false,animFrame=null;
-let lastTime=0,fpsSmooth=0,flashPhase=0;
-let threatLevel='LOW';
-let skyTop=0,skyBot=PH*0.6;
+const video    = document.getElementById('video');
+const canvasP  = document.getElementById('canvas-proc');
+const canvasM  = document.getElementById('canvas-main');
+const ctx      = canvasM.getContext('2d');
+const ctxP     = canvasP.getContext('2d', { willReadFrequently: true });
 
-const video=document.getElementById('video');
-const canvasP=document.getElementById('canvas-proc');
-const canvasM=document.getElementById('canvas-main');
-const ctx=canvasM.getContext('2d');
-const ctxP=canvasP.getContext('2d',{willReadFrequently:true});
+// Processing resolution — kept small for mobile performance
+const PW = 320, PH = 240;
 
-async function launchApp(){
-  const startup=document.getElementById('startup');
-  try{stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:'environment',width:{ideal:1280},height:{ideal:720}}});}
-  catch(e){try{stream=await navigator.mediaDevices.getUserMedia({video:true});}catch(e2){alert('Camera permission denied.');return;}}
-  video.srcObject=stream;
-  await new Promise(r=>video.onloadedmetadata=r);
-  startup.style.animation='fadeOut 0.5s ease forwards';
-  setTimeout(()=>startup.style.display='none',500);
+// ─── Launch ───────────────────────────────────────────────────────
+async function launchApp() {
+  const startup = document.getElementById('startup');
+  const constraints = { video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } } };
+  try {
+    stream = await navigator.mediaDevices.getUserMedia(constraints);
+  } catch(e) {
+    try { stream = await navigator.mediaDevices.getUserMedia({ video: true }); }
+    catch(e2) { alert('Camera permission denied.'); return; }
+  }
+  video.srcObject = stream;
+  await new Promise(r => video.onloadedmetadata = r);
+  startup.style.animation = 'fadeOut 0.5s ease forwards';
+  setTimeout(() => startup.style.display = 'none', 500);
   resizeCanvases();
 }
-function resizeCanvases(){canvasM.width=window.innerWidth;canvasM.height=window.innerHeight;canvasP.width=PW;canvasP.height=PH;}
-window.addEventListener('resize',resizeCanvases);
 
-function setMode(m){['auto','sky','motion','taut'].forEach(id=>{document.getElementById('btn-'+id).classList.toggle('active',id===m);});}
+function resizeCanvases() {
+  canvasM.width = window.innerWidth;
+  canvasM.height = window.innerHeight;
+  canvasP.width = PW; canvasP.height = PH;
+}
+window.addEventListener('resize', resizeCanvases);
 
-function toggleDetection(){
-  detecting=!detecting;
-  const btn=document.getElementById('start-btn');
-  if(detecting){
-    btn.textContent='STOP DETECTION';btn.classList.add('running');
-    document.getElementById('live-dot').style.background='var(--danger)';
+// ─── Controls ─────────────────────────────────────────────────────
+function toggleDetection() {
+  detecting = !detecting;
+  const btn = document.getElementById('start-btn');
+  if (detecting) {
+    btn.textContent = 'STOP DETECTION';
+    btn.classList.add('running');
+    document.getElementById('live-dot').style.background = 'var(--danger)';
     requestAnimationFrame(processFrame);
-  }else{
-    btn.textContent='START DETECTION';btn.classList.remove('running');
-    document.getElementById('live-dot').style.background='var(--clear)';
-    if(animFrame)cancelAnimationFrame(animFrame);
-    ctx.clearRect(0,0,canvasM.width,canvasM.height);
-    setThreat('CLEAR',[]);
+  } else {
+    btn.textContent = 'START DETECTION';
+    btn.classList.remove('running');
+    document.getElementById('live-dot').style.background = 'var(--clear)';
+    if (animFrame) cancelAnimationFrame(animFrame);
+    ctx.clearRect(0, 0, canvasM.width, canvasM.height);
+    setThreat('LOW', []);
   }
 }
-document.getElementById('sens-slider').addEventListener('input',function(){document.getElementById('sens-val').textContent=this.value;});
-document.getElementById('sky-slider').addEventListener('input',function(){document.getElementById('sky-val').textContent=this.value;});
-document.getElementById('sag-slider').addEventListener('input',function(){document.getElementById('sag-val').textContent=this.value+'px';});
-function applyPreset(name){
-  const p={day:{sens:7,sky:5,sag:3},haze:{sens:8,sky:3,sag:5},dusk:{sens:9,sky:2,sag:6},reset:{sens:7,sky:5,sag:3}}[name];
-  if(!p)return;
-  ['sens','sky','sag'].forEach(k=>{document.getElementById(k+'-slider').value=p[k];document.getElementById(k+'-val').textContent=p[k]+(k==='sag'?'px':'');});
+
+function toggleDebug() {
+  showDebug = !showDebug;
+  document.getElementById('debug-btn').style.color =
+    showDebug ? 'var(--warn)' : 'rgba(0,255,160,0.4)';
 }
 
-// ─── Main Loop ────────────────────────────────────────────────────
-function processFrame(timestamp){
-  if(!detecting)return;
-  animFrame=requestAnimationFrame(processFrame);
-  const dt=timestamp-lastTime;lastTime=timestamp;
-  fpsSmooth=fpsSmooth*0.85+(dt>0?1000/dt:0)*0.15;
-  document.getElementById('m-fps').textContent=Math.round(fpsSmooth);
-  if(video.readyState<2)return;
-  ctxP.drawImage(video,0,0,PW,PH);
-  const imageData=ctxP.getImageData(0,0,PW,PH);
-  detectSkyZone(imageData.data);
-  const gray=toGray(imageData.data);
-  const cables=findWires(gray,imageData.data);
-  renderOverlay(cables);
-  setThreat(scoreThreat(cables),cables);
+document.getElementById('sens-slider').addEventListener('input', function() {
+  document.getElementById('sens-val').textContent = this.value;
+});
+document.getElementById('sag-slider').addEventListener('input', function() {
+  document.getElementById('sag-val').textContent = this.value + 'px';
+});
+
+// ─── Main Detection Loop ──────────────────────────────────────────
+function processFrame(timestamp) {
+  if (!detecting) return;
+  animFrame = requestAnimationFrame(processFrame);
+
+  const dt = timestamp - lastTime; lastTime = timestamp;
+  fpsSmooth = fpsSmooth * 0.85 + (dt > 0 ? 1000/dt : 0) * 0.15;
+  document.getElementById('m-fps').textContent = Math.round(fpsSmooth);
+
+  if (video.readyState < 2) return;
+
+  ctxP.drawImage(video, 0, 0, PW, PH);
+  const imageData = ctxP.getImageData(0, 0, PW, PH);
+
+  const edges = sobelEdges(imageData.data, PW, PH);
+  const candidates = extractEdgeChains(edges, PW, PH);
+  confirmedCables = candidates.filter(isCableCandidate);
+
+  renderOverlay(confirmedCables, edges);
+  setThreat(scoreThreat(confirmedCables), confirmedCables);
 }
 
-function toGray(data){
-  const g=new Float32Array(PW*PH);
-  for(let i=0;i<PW*PH;i++){const p=i*4;g[i]=0.299*data[p]+0.587*data[p+1]+0.114*data[p+2];}
-  return g;
-}
+// ─── Step 1: Sobel Edge Detection ────────────────────────────────
+function sobelEdges(data, w, h) {
+  const gray  = new Float32Array(w * h);
+  const blurr = new Float32Array(w * h);
+  const edges = new Uint8Array(w * h);
 
-// ─── Sky Zone ────────────────────────────────────────────────────
-function detectSkyZone(data){
-  const skyThr=parseInt(document.getElementById('sky-slider').value);
-  const rowScore=new Float32Array(PH);
-  for(let y=0;y<PH;y++){
-    let darkCount=0,sumR=0,sumG=0,sumB=0;
-    for(let x=0;x<PW;x++){
-      const p=(y*PW+x)*4;
-      const r=data[p],g=data[p+1],b=data[p+2];
-      sumR+=r;sumG+=g;sumB+=b;
-      if((r+g+b)/3<25)darkCount++;
+  for (let i = 0; i < w * h; i++) {
+    const p = i * 4;
+    gray[i] = 0.299*data[p] + 0.587*data[p+1] + 0.114*data[p+2];
+  }
+
+  // Gaussian blur
+  const K = [1,2,1,2,4,2,1,2,1];
+  for (let y = 1; y < h-1; y++) {
+    for (let x = 1; x < w-1; x++) {
+      let s = 0, ki = 0;
+      for (let dy = -1; dy <= 1; dy++)
+        for (let dx = -1; dx <= 1; dx++)
+          s += gray[(y+dy)*w+(x+dx)] * K[ki++];
+      blurr[y*w+x] = s / 16;
     }
-    if(darkCount/PW>0.5){rowScore[y]=0;continue;}
-    const aR=sumR/PW,aG=sumG/PW,aB=sumB/PW,aBr=(aR+aG+aB)/3;
-    const blueDom=aB>aR*0.93&&aB>aG*0.90;
-    const bright=aBr>85,white=aBr>165&&Math.abs(aR-aB)<35&&Math.abs(aG-aB)<35;
-    rowScore[y]=(bright&&(blueDom||white))?1:(aBr>65&&blueDom)?0.5:0;
   }
-  let top=-1,bot=0,gap=0;
-  for(let y=0;y<PH;y++){
-    if(rowScore[y]>=0.4){if(top<0)top=y;bot=y;gap=0;}
-    else if(top>=0){gap++;if(gap>15)break;}
+
+  const sens = parseInt(document.getElementById('sens-slider').value);
+  const thr = 85 - sens * 7;
+
+  for (let y = 1; y < h-1; y++) {
+    for (let x = 1; x < w-1; x++) {
+      const gx =
+        -blurr[(y-1)*w+(x-1)] + blurr[(y-1)*w+(x+1)]
+        -2*blurr[y*w+(x-1)]   + 2*blurr[y*w+(x+1)]
+        -blurr[(y+1)*w+(x-1)] + blurr[(y+1)*w+(x+1)];
+      const gy =
+        -blurr[(y-1)*w+(x-1)] - 2*blurr[(y-1)*w+x] - blurr[(y-1)*w+(x+1)]
+        +blurr[(y+1)*w+(x-1)] + 2*blurr[(y+1)*w+x] + blurr[(y+1)*w+(x+1)];
+      edges[y*w+x] = Math.sqrt(gx*gx + gy*gy) > thr ? 255 : 0;
+    }
   }
-  if(top<0){top=0;bot=Math.floor(PH*0.45);}
-  skyTop=Math.max(0,top);
-  skyBot=Math.min(PH-1,bot+25);
-  const pct=Math.round(((skyBot-skyTop)/PH)*100);
-  document.getElementById('m-sky').textContent=pct+'%';
-  document.getElementById('m-sky').className='value '+(pct>20?'green':pct>6?'amber':'red');
-  const scY=canvasM.height/PH;
-  document.getElementById('sky-bar').style.top=(skyTop*scY+56)+'px';
-  document.getElementById('sky-bar').style.height=((skyBot-skyTop)*scY)+'px';
-  document.getElementById('sky-label').style.top=((skyTop*scY)+62)+'px';
+  return edges;
 }
 
-// ─── Wire Detection — Local Contrast Scanning ────────────────────
-// Proven approach from pixel analysis of all test images.
-// For every pixel in sky zone: compare its brightness to the average
-// of its 7px horizontal neighbours on each side.
-// A wire pixel is DARKER than its local sky background.
-// This correctly handles:
-//   - Near-horizontal wires (your v3.5 test images)
-//   - Diagonal wires (earlier test images at 60-70°)
-//   - Any angle — because we scan ALL pixels not just edge pixels
-//   - Sky gradient — because we use LOCAL background, not global
+// ─── Step 2: Extract Edge Chains (connected pixel runs) ──────────
+// Instead of Hough lines, we trace connected edge pixels into chains.
+// This preserves the CURVE shape of the edge for catenary analysis.
+function extractEdgeChains(edges, w, h) {
+  const visited = new Uint8Array(w * h);
+  const chains = [];
+
+  for (let y = 2; y < h-2; y++) {
+    for (let x = 2; x < w-2; x++) {
+      if (edges[y*w+x] !== 255 || visited[y*w+x]) continue;
+
+      // BFS to trace connected edge pixels
+      const chain = [];
+      const queue = [[x, y]];
+      visited[y*w+x] = 1;
+
+      while (queue.length > 0) {
+        const [cx, cy] = queue.shift();
+        chain.push([cx, cy]);
+
+        // Check 8-connected neighbours
+        for (let dy = -1; dy <= 1; dy++) {
+          for (let dx = -1; dx <= 1; dx++) {
+            if (dx === 0 && dy === 0) continue;
+            const nx = cx+dx, ny = cy+dy;
+            if (nx < 0 || nx >= w || ny < 0 || ny >= h) continue;
+            if (edges[ny*w+nx] === 255 && !visited[ny*w+nx]) {
+              visited[ny*w+nx] = 1;
+              queue.push([nx, ny]);
+            }
+          }
+        }
+      }
+
+      if (chain.length >= 12) chains.push(chain);
+    }
+  }
+  return chains;
+}
+
+// ─── Step 3: Cable Candidate Filter — THE CORE ALGORITHM ─────────
 //
-// Wire pixels are then clustered into cable objects using a
-// minimum-spanning approach across rows.
-function findWires(gray,colorData){
-  if(skyBot<=skyTop+3)return[];
+// A real suspended cable has these mathematical properties:
+//
+// 1. SPAN: Long enough to cross a meaningful width of frame (cable,
+//    not a leaf edge)
+//
+// 2. HORIZONTAL BIAS: Near-horizontal (cables hang between poles,
+//    poles are vertical — so the cable spans horizontally)
+//
+// 3. CATENARY SAG — the KEY insight from your suggestion:
+//    - Fit a parabola y = ax² + bx + c to the chain points
+//    - A real cable: residuals are LOW (points fit the curve well)
+//      AND the 'a' coefficient is SMALL but NON-ZERO (slight sag)
+//    - A perfectly straight fence edge: residuals are low but a ≈ 0
+//    - Random grass/vegetation: residuals are HIGH (chaotic, no curve)
+//    - A lattice/diagonal: fails the horizontal bias test
+//
+// 4. CONSISTENCY: Points are evenly distributed along the span
+//    (cables are continuous, not patchy like vegetation edges)
+//
+function isCableCandidate(chain) {
+  if (chain.length < 15) return false;
 
-  const sens=parseInt(document.getElementById('sens-slider').value);
-  // Contrast threshold: how much darker than background must wire be
-  // sens=7 -> thr=8, sens=10 -> thr=5
-  const contrastThr=Math.max(4,12-sens);
-  const WIN=7; // half-window for local background
+  // ── Compute bounding box ──
+  let minX = Infinity, maxX = -Infinity;
+  let minY = Infinity, maxY = -Infinity;
+  for (const [x, y] of chain) {
+    if (x < minX) minX = x; if (x > maxX) maxX = x;
+    if (y < minY) minY = y; if (y > maxY) maxY = y;
+  }
 
-  // Build wire pixel map
-  const wireMap=new Uint8Array(PW*PH);
-  const contrastMap=new Float32Array(PW*PH);
+  const spanX = maxX - minX;
+  const spanY = maxY - minY;
 
-  for(let y=skyTop;y<=skyBot;y++){
-    // Skip rows that are mostly dark (status bar, building shadow)
-    let rowBright=0;
-    for(let x=0;x<PW;x++)rowBright+=gray[y*PW+x];
-    if(rowBright/PW<50)continue;
+  // ── 1. SPAN CHECK: must cross at least 15% of frame width ──
+  if (spanX < PW * 0.15) return false;
 
-    for(let x=WIN;x<PW-WIN;x++){
-      // Local background: average of neighbours WIN px each side
-      let bgSum=0,bgN=0;
-      for(let dx=1;dx<=WIN;dx++){
-        bgSum+=gray[y*PW+(x-dx)]+gray[y*PW+(x+dx)];bgN+=2;
-      }
-      const bg=bgSum/bgN;
-      const contrast=bg-gray[y*PW+x];
-      if(contrast>contrastThr){
-        wireMap[y*PW+x]=255;
-        contrastMap[y*PW+x]=contrast;
+  // ── 2. HORIZONTAL BIAS: width must be > 2x height ──
+  // This rejects steep diagonals, vertical fence posts, etc.
+  if (spanX < spanY * 2.0) return false;
+
+  // ── 3. CATENARY/CURVE FIT ──
+  // Fit parabola y = ax² + bx + c using least squares
+  // Normalise x to [0,1] for numerical stability
+  const pts = chain;
+  const n = pts.length;
+  const xScale = spanX > 0 ? 1 / spanX : 1;
+
+  let S1=0, Sx=0, Sx2=0, Sx3=0, Sx4=0;
+  let Sy=0, Sxy=0, Sx2y=0;
+
+  for (const [px, py] of pts) {
+    const xn = (px - minX) * xScale; // normalised 0..1
+    const x2 = xn*xn, x3 = x2*xn, x4 = x3*xn;
+    S1  += 1;
+    Sx  += xn;  Sx2 += x2; Sx3 += x3; Sx4 += x4;
+    Sy  += py;  Sxy += xn*py; Sx2y += x2*py;
+  }
+
+  // Solve 3x3 system [S1 Sx Sx2; Sx Sx2 Sx3; Sx2 Sx3 Sx4] * [c;b;a] = [Sy;Sxy;Sx2y]
+  // Using Cramer's rule
+  const A = [
+    [S1,  Sx,  Sx2],
+    [Sx,  Sx2, Sx3],
+    [Sx2, Sx3, Sx4]
+  ];
+  const B = [Sy, Sxy, Sx2y];
+  const det3 = (m) =>
+    m[0][0]*(m[1][1]*m[2][2]-m[1][2]*m[2][1])
+   -m[0][1]*(m[1][0]*m[2][2]-m[1][2]*m[2][0])
+   +m[0][2]*(m[1][0]*m[2][1]-m[1][1]*m[2][0]);
+
+  const D = det3(A);
+  if (Math.abs(D) < 1e-10) return false;
+
+  const Ac = JSON.parse(JSON.stringify(A));
+  const Ab = JSON.parse(JSON.stringify(A));
+  const Aa = JSON.parse(JSON.stringify(A));
+  for (let i = 0; i < 3; i++) {
+    Ac[i][0] = B[i];
+    Ab[i][1] = B[i];
+    Aa[i][2] = B[i];
+  }
+
+  const coeffC = det3(Ac) / D;
+  const coeffB = det3(Ab) / D;
+  const coeffA = det3(Aa) / D; // curvature — key value!
+
+  // Compute residuals (how well points fit the parabola)
+  let sumResid2 = 0;
+  for (const [px, py] of pts) {
+    const xn = (px - minX) * xScale;
+    const yFit = coeffA*xn*xn + coeffB*xn + coeffC;
+    const r = py - yFit;
+    sumResid2 += r*r;
+  }
+  const rmse = Math.sqrt(sumResid2 / n);
+
+  // ── 4. SAG CHECK (your key insight) ──
+  // The parabola coefficient 'a' encodes sag:
+  // - a = 0 → perfectly straight line (fence edge, building roof)
+  // - a small positive → gentle downward sag (CABLE signature)
+  // - a very large → too curved (probably not a cable)
+  // - a negative → upward curve (ignore)
+  //
+  // Scale 'a' back to pixel space: actual sag ≈ a * spanX²
+  const sagPx = Math.abs(coeffA) * spanX * spanX * xScale * xScale;
+  // (coeffA is in normalised coords, so multiply by spanX² to get pixels)
+  const sagActual = Math.abs(coeffA) * spanX * spanX;
+
+  const sagMin = parseFloat(document.getElementById('sag-slider').value);
+  const sagMax = sagMin * 20; // reject wildly curved things
+
+  // RMSE threshold — points must fit the parabola reasonably well
+  const rmseMax = 6.0;
+
+  // ── Verdict ──
+  const hasSag         = sagActual >= sagMin && sagActual <= sagMax;
+  const fitsParabola   = rmse < rmseMax;
+  const notStraight    = Math.abs(coeffA) * spanX * spanX > sagMin * 0.5;
+
+  // Store metrics on the chain for display
+  chain._sag  = Math.round(sagActual * 10) / 10;
+  chain._rmse = Math.round(rmse * 10) / 10;
+  chain._a    = coeffA;
+  chain._span = spanX;
+  chain._minX = minX; chain._minY = minY; chain._maxX = maxX;
+
+  return hasSag && fitsParabola && notStraight;
+}
+
+// ─── Step 4: Render ───────────────────────────────────────────────
+function renderOverlay(cables, edges) {
+  const W = canvasM.width, H = canvasM.height;
+  const sx = W / PW, sy = H / PH;
+  ctx.clearRect(0, 0, W, H);
+
+  // Debug: show edge pixels
+  if (showDebug) {
+    ctx.fillStyle = 'rgba(0,255,160,0.25)';
+    for (let y = 0; y < PH; y++) {
+      for (let x = 0; x < PW; x++) {
+        if (edges[y*PW+x] === 255) {
+          ctx.fillRect(x*sx, y*sy, sx, sy);
+        }
       }
     }
   }
 
-  // Cluster wire pixels into line objects
-  // Strategy: scan each row for connected runs of wire pixels.
-  // Then group runs from adjacent rows (within 3px y) with overlapping x.
-  const rowRuns=[];
-  for(let y=skyTop;y<=skyBot;y++){
-    let start=-1,maxC=0,sumC=0,n=0;
-    for(let x=0;x<PW;x++){
-      if(wireMap[y*PW+x]){
-        if(start<0)start=x;
-        const c=contrastMap[y*PW+x];
-        if(c>maxC)maxC=c;
-        sumC+=c;n++;
-      }else if(start>=0){
-        const span=x-start;
-        if(span>=8) // minimum 8px run
-          rowRuns.push({y,x1:start,x2:x-1,span,maxC,avgC:sumC/n});
-        start=-1;maxC=0;sumC=0;n=0;
+  for (const chain of cables) {
+    const color = threatLevel === 'CRITICAL' ? '#ff2d2d'
+                : threatLevel === 'HIGH'     ? '#ff6b00'
+                : '#ffd60a';
+
+    // Draw the actual curve shape (not a straight line!)
+    if (chain.length > 1) {
+      ctx.save();
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 3;
+      ctx.shadowColor = color;
+      ctx.shadowBlur = 14;
+      ctx.lineJoin = 'round';
+      ctx.lineCap = 'round';
+      ctx.beginPath();
+
+      // Sort chain by x for clean curve drawing
+      const sorted = [...chain].sort((a,b) => a[0]-b[0]);
+      ctx.moveTo(sorted[0][0]*sx, sorted[0][1]*sy);
+      for (let i = 1; i < sorted.length; i++) {
+        ctx.lineTo(sorted[i][0]*sx, sorted[i][1]*sy);
       }
+      ctx.stroke();
+      ctx.restore();
     }
-    if(start>=0){
-      const span=PW-start;
-      if(span>=8)rowRuns.push({y,x1:start,x2:PW-1,span,maxC,avgC:sumC/n});
-    }
+
+    // Endpoint dots
+    const sorted = [...chain].sort((a,b) => a[0]-b[0]);
+    const p1 = sorted[0], p2 = sorted[sorted.length-1];
+    ctx.fillStyle = color;
+    ctx.beginPath(); ctx.arc(p1[0]*sx, p1[1]*sy, 6, 0, Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc(p2[0]*sx, p2[1]*sy, 6, 0, Math.PI*2); ctx.fill();
+
+    // Label: sag value
+    const mx = ((p1[0]+p2[0])/2)*sx;
+    const my = ((p1[1]+p2[1])/2)*sy - 10;
+    ctx.font = '500 11px "Share Tech Mono", monospace';
+    ctx.fillStyle = 'rgba(255,255,255,0.9)';
+    ctx.fillText(`SAG ${chain._sag}px`, mx - 20, my);
   }
 
-  if(!rowRuns.length)return[];
-
-  // Group row runs into cables
-  rowRuns.sort((a,b)=>a.y-b.y);
-  const clusters=[];
-  for(const run of rowRuns){
-    const match=clusters.find(cl=>{
-      const last=cl[cl.length-1];
-      if(run.y-last.y>5)return false; // must be within 5 rows
-      // x ranges must overlap or be close
-      const overlapOrClose=run.x1<=last.x2+10&&run.x2>=last.x1-10;
-      return overlapOrClose;
-    });
-    if(match)match.push(run);
-    else clusters.push([run]);
-  }
-
-  // Build cable objects — require minimum span
-  const minSpan=PW*0.12; // 12% of frame = ~38px
-  const cables=[];
-  for(const cl of clusters){
-    const x1=Math.min(...cl.map(r=>r.x1));
-    const x2=Math.max(...cl.map(r=>r.x2));
-    const span=x2-x1;
-    if(span<minSpan)continue;
-
-    const yMid=Math.round(cl.reduce((s,r)=>s+r.y,0)/cl.length);
-    const maxContrast=Math.max(...cl.map(r=>r.maxC));
-    const avgContrast=cl.reduce((s,r)=>s+r.avgC,0)/cl.length;
-
-    // Find the actual y at each x end for drawing diagonal wires correctly
-    const leftRuns=cl.filter(r=>r.x1<=x1+PW*0.15);
-    const rightRuns=cl.filter(r=>r.x2>=x2-PW*0.15);
-    const y1=leftRuns.length?Math.round(leftRuns.reduce((s,r)=>s+r.y,0)/leftRuns.length):yMid;
-    const y2=rightRuns.length?Math.round(rightRuns.reduce((s,r)=>s+r.y,0)/rightRuns.length):yMid;
-
-    cables.push({x1,y1,x2,y2,_span:span,_contrast:avgContrast,
-      _maxContrast:maxContrast,_rows:cl.length,_method:'WIRE'});
-  }
-
-  // Sort by span, keep best 6
-  cables.sort((a,b)=>b._span-a._span);
-  const top=cables.slice(0,6);
-  top.forEach(c=>scoreProximity(c));
-  return top;
-}
-
-// ─── Proximity Scoring ────────────────────────────────────────────
-function scoreProximity(c){
-  const sr=Math.max(1,skyBot-skyTop);
-  const cY=(c.y1+c.y2)/2;
-  const v=cY<=skyTop?0.05:cY>=skyBot?1.0:(cY-skyTop)/sr;
-  const cs=Math.min(1,Math.max(0,(c._contrast||0)/40));
-  const ls=Math.min(1,(c._span||0)/(PW*0.75));
-  const score=v*0.55+cs*0.25+ls*0.20;
-  c._proxScore=score;
-  if(score>=0.85){c._zone='IMMINENT';c._timeToImpact='<1s';c._color='#ff0000';}
-  else if(score>=0.70){c._zone='CRITICAL';c._timeToImpact='1-3s';c._color='#ff2d2d';}
-  else if(score>=0.50){c._zone='WARNING';c._timeToImpact='3-8s';c._color='#ff6b00';}
-  else if(score>=0.28){c._zone='CAUTION';c._timeToImpact='8-15s';c._color='#ff9500';}
-  else{c._zone='ADVISORY';c._timeToImpact='>15s';c._color='#ffd60a';}
-}
-
-// ─── Render ───────────────────────────────────────────────────────
-function renderOverlay(cables){
-  const W=canvasM.width,H=canvasM.height,sx=W/PW,sy=H/PH;
-  ctx.clearRect(0,0,W,H);
-  flashPhase=(flashPhase+0.18)%(Math.PI*2);
-  const sorted=[...cables].sort((a,b)=>(a._proxScore||0)-(b._proxScore||0));
-  for(const c of sorted){
-    const color=c._color||'#ffd60a';
-    const zone=c._zone||'ADVISORY';
-    const thick=zone==='IMMINENT'?5:zone==='CRITICAL'?4:zone==='WARNING'?3:2;
-    const alpha=zone==='IMMINENT'?0.55+0.45*Math.sin(flashPhase*5):1.0;
-    ctx.save();
-    ctx.globalAlpha=alpha;
-    ctx.strokeStyle=color;ctx.lineWidth=thick;
-    ctx.shadowColor=color;ctx.shadowBlur=zone==='IMMINENT'?22:12;
-    ctx.lineCap='round';
-    ctx.beginPath();ctx.moveTo(c.x1*sx,c.y1*sy);ctx.lineTo(c.x2*sx,c.y2*sy);
-    ctx.stroke();
-    ctx.restore();
-    ctx.globalAlpha=alpha;
-    ctx.fillStyle=color;
-    ctx.beginPath();ctx.arc(c.x1*sx,c.y1*sy,thick+2,0,Math.PI*2);ctx.fill();
-    ctx.beginPath();ctx.arc(c.x2*sx,c.y2*sy,thick+2,0,Math.PI*2);ctx.fill();
-    ctx.globalAlpha=1;
-    const lx=((c.x1+c.x2)/2)*sx;
-    const ly=Math.min(c.y1,c.y2)*sy-12;
-    const label=zone+' '+c._timeToImpact;
-    ctx.font='bold 10px "Share Tech Mono",monospace';
-    const tw=ctx.measureText(label).width;
-    ctx.fillStyle='rgba(0,0,0,0.65)';ctx.fillRect(lx-tw/2-3,ly-13,tw+6,16);
-    ctx.fillStyle=color;ctx.fillText(label,lx-tw/2,ly);
-  }
-  if(cables.length>0){
-    ctx.font='500 11px "Share Tech Mono",monospace';
-    ctx.fillStyle='rgba(0,255,160,0.65)';
-    ctx.fillText(cables.length+' CABLE'+(cables.length>1?'S':'')+' DETECTED',16,canvasM.height-240);
+  // Update sag display
+  if (cables.length > 0) {
+    const maxSag = Math.max(...cables.map(c => c._sag));
+    document.getElementById('m-sag').textContent = maxSag + 'px';
+    document.getElementById('m-sag').className = 'value ' + (maxSag > 20 ? 'red' : 'amber');
+  } else {
+    document.getElementById('m-sag').textContent = '--';
+    document.getElementById('m-sag').className = 'value';
   }
 }
 
-// ─── Threat ───────────────────────────────────────────────────────
-function scoreThreat(cables){
-  if(!cables.length)return'CLEAR';
-  const rank={ADVISORY:1,CAUTION:2,WARNING:3,CRITICAL:4,IMMINENT:5};
-  return cables.reduce((b,c)=>(rank[c._zone]||1)>(rank[b._zone]||1)?c:b,cables[0])._zone||'ADVISORY';
+// ─── Threat Scoring ───────────────────────────────────────────────
+function scoreThreat(cables) {
+  if (cables.length === 0) return 'LOW';
+  if (cables.length >= 3)  return 'CRITICAL';
+  if (cables.length >= 2)  return 'HIGH';
+  return 'MEDIUM';
 }
-function setThreat(level,cables){
-  threatLevel=level;
-  const worst=cables.length?cables.reduce((b,c)=>(c._proxScore||0)>(b._proxScore||0)?c:b,cables[0]):null;
-  document.getElementById('m-cables').textContent=cables.length;
-  document.getElementById('m-tti').textContent=worst?worst._timeToImpact:'--';
-  document.getElementById('m-tti').className='value '+(level==='IMMINENT'||level==='CRITICAL'?'red':level==='WARNING'||level==='CAUTION'?'amber':'green');
-  const short={CLEAR:'CLEAR',ADVISORY:'ADVSY',CAUTION:'CAUTN',WARNING:'WARN',CRITICAL:'CRIT',IMMINENT:'IMMIN'};
-  document.getElementById('m-threat').textContent=short[level]||level;
-  document.getElementById('m-threat').className='value '+(level==='IMMINENT'||level==='CRITICAL'?'red':level==='WARNING'||level==='CAUTION'?'amber':'green');
-  const statusEl=document.getElementById('status-text');
-  const bannerEl=document.getElementById('alert-banner');
-  const ring=document.getElementById('threat-ring');
-  statusEl.className='';ring.classList.remove('visible');bannerEl.classList.remove('visible');
-  if(level==='IMMINENT'){statusEl.className='danger';statusEl.textContent='IMMINENT';bannerEl.classList.add('visible');document.getElementById('alert-text').textContent='⚠ PULL UP — CABLE AT IMPACT RANGE';ring.classList.add('visible');ring.style.cssText+=';width:90px;height:90px;left:'+(canvasM.width/2)+'px;top:'+(canvasM.height/2)+'px';}
-  else if(level==='CRITICAL'){statusEl.className='danger';statusEl.textContent='CRITICAL';bannerEl.classList.add('visible');document.getElementById('alert-text').textContent='⚠ CABLE — EVASIVE ACTION NOW';ring.classList.add('visible');ring.style.cssText+=';width:90px;height:90px;left:'+(canvasM.width/2)+'px;top:'+(canvasM.height/2)+'px';}
-  else if(level==='WARNING'){statusEl.className='danger';statusEl.textContent='WARNING';bannerEl.classList.add('visible');document.getElementById('alert-text').textContent='⚠ CABLE AHEAD — BEGIN AVOIDANCE';}
-  else if(level==='CAUTION'){statusEl.className='warn';statusEl.textContent='CAUTION';}
-  else if(level==='ADVISORY'){statusEl.className='warn';statusEl.textContent='ADVISORY';}
-  else{statusEl.className='clear';statusEl.textContent='CLEAR';}
+
+function setThreat(level, cables) {
+  threatLevel = level;
+  const statusEl = document.getElementById('status-text');
+  const bannerEl = document.getElementById('alert-banner');
+  const threatEl = document.getElementById('m-threat');
+  const cablesEl = document.getElementById('m-cables');
+  const ring     = document.getElementById('threat-ring');
+
+  cablesEl.textContent = cables.length;
+  threatEl.textContent = level;
+  threatEl.className = 'value ' +
+    (level==='CRITICAL'?'red':level==='HIGH'||level==='MEDIUM'?'amber':'green');
+
+  statusEl.className = '';
+  if (level === 'CRITICAL' || level === 'HIGH') {
+    statusEl.className = 'danger';
+    statusEl.textContent = '⚠ THREAT';
+    bannerEl.classList.add('visible');
+    document.getElementById('alert-text').textContent =
+      level === 'CRITICAL'
+        ? '⚠ MULTIPLE CABLES — IMMEDIATE HAZARD'
+        : '⚠ CABLE DETECTED — CAUTION';
+    ring.classList.add('visible');
+    ring.style.cssText += ';width:80px;height:80px;left:' +
+      (canvasM.width/2) + 'px;top:' + (canvasM.height/2) + 'px';
+  } else if (level === 'MEDIUM') {
+    statusEl.className = 'warn';
+    statusEl.textContent = 'CAUTION';
+    bannerEl.classList.remove('visible');
+    ring.classList.remove('visible');
+  } else {
+    statusEl.className = 'clear';
+    statusEl.textContent = 'CLEAR';
+    bannerEl.classList.remove('visible');
+    ring.classList.remove('visible');
+  }
 }
 </script>
 </body>
