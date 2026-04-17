@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>APLAWS — Active Power Line Advisory Warning System</title>
+<title>APLAWS — Active Power Line Advisory Warning System v2</title>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&family=Share+Tech+Mono&display=swap');
 
@@ -14,7 +14,7 @@
     --hud: rgba(0, 255, 160, 0.85);
     --hud-dim: rgba(0, 255, 160, 0.35);
     --bg: #050a0e;
-    --panel: rgba(5, 20, 15, 0.85);
+    --panel: rgba(5, 20, 15, 0.88);
     --scan: #00ffa0;
   }
 
@@ -30,314 +30,219 @@
     touch-action: none;
   }
 
-  #app {
-    position: relative;
-    width: 100%;
-    height: 100%;
-    display: flex;
-    flex-direction: column;
-  }
+  #app { position: relative; width: 100%; height: 100%; }
 
-  /* ── Camera Layer ── */
   #video {
-    position: absolute;
-    inset: 0;
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-    z-index: 0;
+    position: absolute; inset: 0;
+    width: 100%; height: 100%;
+    object-fit: cover; z-index: 0;
   }
 
   #canvas-main {
-    position: absolute;
-    inset: 0;
-    width: 100%;
-    height: 100%;
-    z-index: 1;
-    pointer-events: none;
-  }
-
-  /* ── HUD Overlay ── */
-  #hud {
-    position: absolute;
-    inset: 0;
-    z-index: 2;
-    pointer-events: none;
-    display: flex;
-    flex-direction: column;
+    position: absolute; inset: 0;
+    width: 100%; height: 100%;
+    z-index: 1; pointer-events: none;
   }
 
   /* Corner brackets */
   .corner {
-    position: absolute;
-    width: 36px;
-    height: 36px;
-    border-color: var(--hud);
-    border-style: solid;
-    opacity: 0.7;
+    position: absolute; width: 36px; height: 36px;
+    border-color: var(--hud); border-style: solid; opacity: 0.6;
+    z-index: 2; pointer-events: none;
   }
   .corner.tl { top: 60px; left: 12px; border-width: 2px 0 0 2px; }
   .corner.tr { top: 60px; right: 12px; border-width: 2px 2px 0 0; }
-  .corner.bl { bottom: 180px; left: 12px; border-width: 0 0 2px 2px; }
-  .corner.br { bottom: 180px; right: 12px; border-width: 0 2px 2px 0; }
+  .corner.bl { bottom: 210px; left: 12px; border-width: 0 0 2px 2px; }
+  .corner.br { bottom: 210px; right: 12px; border-width: 0 2px 2px 0; }
 
-  /* ── Top Status Bar ── */
+  /* Top bar */
   #top-bar {
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    height: 56px;
+    position: absolute; top: 0; left: 0; right: 0; height: 56px;
     background: var(--panel);
     border-bottom: 1px solid rgba(0,255,160,0.2);
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 0 16px;
-    z-index: 10;
-    backdrop-filter: blur(8px);
-    -webkit-backdrop-filter: blur(8px);
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0 16px; z-index: 10;
+    backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
   }
 
-  #top-bar .logo {
+  .logo {
     font-family: 'Share Tech Mono', monospace;
-    font-size: 13px;
-    letter-spacing: 2px;
-    color: var(--scan);
-    display: flex;
-    align-items: center;
-    gap: 8px;
+    font-size: 13px; letter-spacing: 2px; color: var(--scan);
+    display: flex; align-items: center; gap: 8px;
   }
-
-  #top-bar .logo .dot {
-    width: 7px; height: 7px;
-    border-radius: 50%;
-    background: var(--clear);
-    animation: pulse 1.4s ease-in-out infinite;
+  .logo .dot {
+    width: 7px; height: 7px; border-radius: 50%;
+    background: var(--clear); animation: pulse 1.4s ease-in-out infinite;
   }
 
   #status-text {
     font-family: 'Share Tech Mono', monospace;
-    font-size: 11px;
-    letter-spacing: 1px;
-    padding: 4px 10px;
-    border-radius: 3px;
-    border: 1px solid;
+    font-size: 11px; letter-spacing: 1px;
+    padding: 4px 10px; border-radius: 3px; border: 1px solid;
     transition: all 0.3s;
   }
-  #status-text.clear { color: var(--clear); border-color: var(--clear); background: rgba(48,209,88,0.1); }
-  #status-text.warn  { color: var(--warn); border-color: var(--warn); background: rgba(255,149,0,0.1); }
-  #status-text.danger{ color: var(--danger); border-color: var(--danger); background: rgba(255,45,45,0.15); animation: flashbg 0.4s ease-in-out infinite; }
+  #status-text.clear  { color: var(--clear); border-color: var(--clear); background: rgba(48,209,88,0.1); }
+  #status-text.warn   { color: var(--warn);  border-color: var(--warn);  background: rgba(255,149,0,0.1); }
+  #status-text.danger { color: var(--danger); border-color: var(--danger); background: rgba(255,45,45,0.15); animation: flashbg 0.4s ease-in-out infinite; }
 
-  /* ── Alert Banner ── */
+  /* Alert banner */
   #alert-banner {
-    position: absolute;
-    top: 56px;
-    left: 0; right: 0;
-    height: 0;
-    overflow: hidden;
-    z-index: 10;
+    position: absolute; top: 56px; left: 0; right: 0;
+    height: 0; overflow: hidden; z-index: 10;
     transition: height 0.3s ease;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background: rgba(255,45,45,0.9);
-    backdrop-filter: blur(4px);
-    -webkit-backdrop-filter: blur(4px);
+    display: flex; align-items: center; justify-content: center;
+    background: rgba(255,45,45,0.92);
+    backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px);
   }
   #alert-banner.visible { height: 44px; }
   #alert-banner span {
     font-family: 'Share Tech Mono', monospace;
-    font-size: 14px;
-    font-weight: 700;
-    letter-spacing: 3px;
-    color: white;
-    text-transform: uppercase;
+    font-size: 14px; font-weight: 700;
+    letter-spacing: 3px; color: white; text-transform: uppercase;
   }
 
-  /* ── Bottom Panel ── */
+  /* Bottom panel */
   #bottom-panel {
-    position: absolute;
-    bottom: 0; left: 0; right: 0;
+    position: absolute; bottom: 0; left: 0; right: 0;
     background: var(--panel);
     border-top: 1px solid rgba(0,255,160,0.2);
-    backdrop-filter: blur(10px);
-    -webkit-backdrop-filter: blur(10px);
-    padding: 12px 16px 24px;
-    z-index: 10;
+    backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+    padding: 10px 16px 28px; z-index: 10;
   }
 
-  /* Metrics row */
   .metrics {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 8px;
-    margin-bottom: 12px;
+    display: grid; grid-template-columns: repeat(4, 1fr);
+    gap: 6px; margin-bottom: 10px;
   }
 
   .metric {
     background: rgba(0,255,160,0.06);
     border: 1px solid rgba(0,255,160,0.15);
-    border-radius: 6px;
-    padding: 8px 10px;
-    text-align: center;
+    border-radius: 6px; padding: 6px 8px; text-align: center;
   }
-
   .metric .label {
-    font-size: 9px;
-    letter-spacing: 1.5px;
-    color: var(--hud-dim);
-    text-transform: uppercase;
-    font-family: 'Share Tech Mono', monospace;
+    font-size: 8px; letter-spacing: 1.5px; color: var(--hud-dim);
+    text-transform: uppercase; font-family: 'Share Tech Mono', monospace;
   }
-
   .metric .value {
     font-family: 'Share Tech Mono', monospace;
-    font-size: 20px;
-    font-weight: 600;
-    color: var(--scan);
-    line-height: 1.2;
-    margin-top: 2px;
+    font-size: 17px; font-weight: 600; color: var(--scan);
+    line-height: 1.2; margin-top: 1px;
   }
-  .metric .value.red { color: var(--danger); }
+  .metric .value.red   { color: var(--danger); }
   .metric .value.amber { color: var(--warn); }
+  .metric .value.green { color: var(--clear); }
 
-  /* Sensitivity slider */
   .ctrl-row {
-    display: flex;
-    align-items: center;
-    gap: 10px;
+    display: flex; align-items: center; gap: 10px; margin-bottom: 8px;
   }
-
   .ctrl-row label {
-    font-size: 10px;
-    letter-spacing: 1px;
-    color: var(--hud-dim);
-    white-space: nowrap;
-    font-family: 'Share Tech Mono', monospace;
-    min-width: 75px;
+    font-size: 10px; letter-spacing: 1px; color: var(--hud-dim);
+    white-space: nowrap; font-family: 'Share Tech Mono', monospace;
+    min-width: 80px;
   }
-
   input[type=range] {
-    flex: 1;
-    -webkit-appearance: none;
-    height: 3px;
-    background: rgba(0,255,160,0.2);
-    border-radius: 2px;
-    outline: none;
+    flex: 1; -webkit-appearance: none;
+    height: 3px; background: rgba(0,255,160,0.2);
+    border-radius: 2px; outline: none;
   }
   input[type=range]::-webkit-slider-thumb {
-    -webkit-appearance: none;
-    width: 18px; height: 18px;
-    border-radius: 50%;
-    background: var(--scan);
-    cursor: pointer;
+    -webkit-appearance: none; width: 18px; height: 18px;
+    border-radius: 50%; background: var(--scan); cursor: pointer;
   }
-
   .ctrl-val {
-    font-family: 'Share Tech Mono', monospace;
-    font-size: 12px;
-    color: var(--scan);
-    min-width: 28px;
-    text-align: right;
+    font-family: 'Share Tech Mono', monospace; font-size: 12px;
+    color: var(--scan); min-width: 32px; text-align: right;
   }
 
-  /* Start button */
   #start-btn {
-    display: block;
-    width: 100%;
-    padding: 14px;
-    background: transparent;
-    border: 1.5px solid var(--scan);
-    border-radius: 6px;
-    color: var(--scan);
-    font-family: 'Rajdhani', sans-serif;
-    font-size: 15px;
-    font-weight: 600;
-    letter-spacing: 3px;
-    text-transform: uppercase;
-    cursor: pointer;
-    transition: background 0.2s;
-    margin-bottom: 12px;
-    pointer-events: all;
+    display: block; width: 100%; padding: 13px;
+    background: transparent; border: 1.5px solid var(--scan);
+    border-radius: 6px; color: var(--scan);
+    font-family: 'Rajdhani', sans-serif; font-size: 15px;
+    font-weight: 600; letter-spacing: 3px; text-transform: uppercase;
+    cursor: pointer; transition: background 0.2s;
+    margin-bottom: 0; pointer-events: all;
     -webkit-tap-highlight-color: transparent;
   }
   #start-btn:active { background: rgba(0,255,160,0.15); }
-  #start-btn.running {
-    border-color: var(--danger);
-    color: var(--danger);
-  }
+  #start-btn.running { border-color: var(--danger); color: var(--danger); }
 
-  /* ── Startup screen ── */
+  /* Startup screen */
   #startup {
-    position: absolute;
-    inset: 0;
-    background: var(--bg);
-    z-index: 100;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: 24px;
-    padding: 32px;
-    transition: opacity 0.5s;
+    position: absolute; inset: 0; background: var(--bg);
+    z-index: 100; display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    gap: 20px; padding: 32px; transition: opacity 0.5s;
   }
   #startup h1 {
     font-family: 'Share Tech Mono', monospace;
-    font-size: 22px;
-    letter-spacing: 4px;
-    color: var(--scan);
+    font-size: 28px; letter-spacing: 6px; color: var(--scan);
     text-align: center;
-    line-height: 1.4;
+  }
+  #startup .sub {
+    font-size: 11px; letter-spacing: 2px;
+    color: rgba(0,255,160,0.45); text-align: center; margin-top: -12px;
+    font-family: 'Share Tech Mono', monospace;
   }
   #startup p {
-    font-size: 14px;
-    color: rgba(0,255,160,0.55);
-    text-align: center;
-    line-height: 1.6;
-    letter-spacing: 0.5px;
+    font-size: 14px; color: rgba(0,255,160,0.55);
+    text-align: center; line-height: 1.6; letter-spacing: 0.3px;
   }
-  #startup .warning-box {
-    border: 1px solid var(--warn);
-    border-radius: 6px;
-    padding: 14px 16px;
-    background: rgba(255,149,0,0.07);
+  .tag-row {
+    display: flex; gap: 8px; flex-wrap: wrap; justify-content: center;
   }
-  #startup .warning-box p {
-    color: var(--warn);
-    font-size: 12px;
-    letter-spacing: 0.5px;
+  .tag {
+    font-family: 'Share Tech Mono', monospace; font-size: 10px;
+    letter-spacing: 1px; padding: 4px 10px;
+    border: 1px solid rgba(0,255,160,0.3); border-radius: 3px;
+    color: rgba(0,255,160,0.6);
   }
+  .tag.new { border-color: var(--warn); color: var(--warn); }
+  .warn-box {
+    border: 1px solid var(--warn); border-radius: 6px;
+    padding: 12px 16px; background: rgba(255,149,0,0.07); width: 100%;
+  }
+  .warn-box p { color: var(--warn); font-size: 12px; line-height: 1.5; }
   #launch-btn {
-    width: 100%;
-    max-width: 300px;
-    padding: 16px;
-    background: var(--scan);
-    border: none;
-    border-radius: 6px;
-    color: #050a0e;
-    font-family: 'Rajdhani', sans-serif;
-    font-size: 16px;
-    font-weight: 700;
-    letter-spacing: 3px;
-    text-transform: uppercase;
-    cursor: pointer;
+    width: 100%; max-width: 300px; padding: 16px;
+    background: var(--scan); border: none; border-radius: 6px;
+    color: #050a0e; font-family: 'Rajdhani', sans-serif;
+    font-size: 16px; font-weight: 700; letter-spacing: 3px;
+    text-transform: uppercase; cursor: pointer;
     -webkit-tap-highlight-color: transparent;
   }
 
-  /* Scan line animation */
+  /* Scan line */
   #scan-line {
-    position: absolute;
-    left: 12px; right: 12px;
-    height: 1px;
+    position: absolute; left: 12px; right: 12px; height: 1px;
     background: linear-gradient(90deg, transparent, var(--scan), transparent);
-    opacity: 0.5;
-    z-index: 3;
-    animation: scanMove 3s linear infinite;
-    pointer-events: none;
+    opacity: 0.4; z-index: 3;
+    animation: scanMove 3s linear infinite; pointer-events: none;
   }
 
-  /* ── Animations ── */
+  /* Threat ring */
+  #threat-ring {
+    position: absolute; border-radius: 50%;
+    border: 2px solid var(--danger); pointer-events: none;
+    opacity: 0; transform: translate(-50%, -50%);
+    transition: opacity 0.2s; z-index: 4;
+  }
+  #threat-ring.visible {
+    opacity: 0.8; animation: ringPulse 0.7s ease-out infinite;
+  }
+
+  /* Debug overlay toggle */
+  #debug-btn {
+    position: absolute; top: 16px; right: 70px;
+    font-family: 'Share Tech Mono', monospace; font-size: 9px;
+    letter-spacing: 1px; padding: 3px 7px;
+    border: 1px solid rgba(0,255,160,0.25); border-radius: 3px;
+    color: rgba(0,255,160,0.4); background: transparent;
+    cursor: pointer; z-index: 11;
+    -webkit-tap-highlight-color: transparent;
+  }
+
   @keyframes pulse {
     0%,100% { opacity: 1; transform: scale(1); }
     50% { opacity: 0.4; transform: scale(0.8); }
@@ -347,104 +252,77 @@
     50% { background: rgba(255,45,45,0.35); }
   }
   @keyframes scanMove {
-    0% { top: 60px; }
-    100% { top: calc(100% - 180px); }
-  }
-  @keyframes fadeOut {
-    to { opacity: 0; pointer-events: none; }
-  }
-
-  /* Detection highlight pulse */
-  .line-flash {
-    animation: lineFlash 0.5s ease-out;
-  }
-  @keyframes lineFlash {
-    0% { opacity: 1; }
-    100% { opacity: 0; }
-  }
-
-  #threat-ring {
-    position: absolute;
-    border-radius: 50%;
-    border: 2px solid var(--danger);
-    pointer-events: none;
-    opacity: 0;
-    transform: translate(-50%, -50%);
-    transition: opacity 0.2s;
-    z-index: 4;
-  }
-  #threat-ring.visible {
-    opacity: 0.8;
-    animation: ringPulse 0.6s ease-out infinite;
+    0% { top: 60px; } 100% { top: calc(100% - 210px); }
   }
   @keyframes ringPulse {
-    0% { transform: translate(-50%, -50%) scale(1); opacity: 0.8; }
-    100% { transform: translate(-50%, -50%) scale(1.4); opacity: 0; }
+    0% { transform: translate(-50%,-50%) scale(1); opacity: 0.8; }
+    100% { transform: translate(-50%,-50%) scale(1.5); opacity: 0; }
   }
+  @keyframes fadeOut { to { opacity: 0; pointer-events: none; } }
 </style>
 </head>
 <body>
-
 <div id="app">
-  <!-- Startup screen -->
+
+  <!-- Startup -->
   <div id="startup">
     <h1>APLAWS</h1>
-    <p style="font-size:11px; letter-spacing:2px; color:rgba(0,255,160,0.5); margin-top:-16px">Active Power Line Advisory Warning System</p>
-    <p>Real-time aerial cable detection for helicopter safety. Uses computer vision to identify power lines, telephone cables, and wire obstacles.</p>
-    <div class="warning-box">
-      <p>⚠ PROTOTYPE — FOR RESEARCH USE ONLY<br>Do not rely on this system as your sole obstacle avoidance tool. Always follow official aviation procedures.</p>
+    <p class="sub">Active Power Line Advisory Warning System</p>
+    <p>Catenary curve detection engine v2.0 — identifies the natural sag signature of suspended cables, rejecting fences, buildings and vegetation.</p>
+    <div class="tag-row">
+      <span class="tag">CATENARY DETECTION</span>
+      <span class="tag new">NEW v2</span>
+      <span class="tag">CURVE FITTING</span>
+      <span class="tag">FALSE-POSITIVE FILTER</span>
     </div>
-    <p style="font-size:12px; color:rgba(0,255,160,0.4)">Requires camera permission. Best used in portrait or landscape mode pointing toward cables.</p>
+    <div class="warn-box">
+      <p>⚠ PROTOTYPE — RESEARCH USE ONLY<br>Not certified for operational aviation use. Always follow official procedures.</p>
+    </div>
     <button id="launch-btn" onclick="launchApp()">ACTIVATE SYSTEM</button>
   </div>
 
-  <!-- Camera -->
   <video id="video" autoplay playsinline muted></video>
-
-  <!-- Processing canvas (hidden) -->
   <canvas id="canvas-proc" style="display:none"></canvas>
-
-  <!-- Overlay canvas -->
   <canvas id="canvas-main"></canvas>
 
-  <!-- HUD -->
-  <div id="hud">
-    <div class="corner tl"></div>
-    <div class="corner tr"></div>
-    <div class="corner bl"></div>
-    <div class="corner br"></div>
-  </div>
+  <!-- HUD corners -->
+  <div class="corner tl"></div>
+  <div class="corner tr"></div>
+  <div class="corner bl"></div>
+  <div class="corner br"></div>
 
-  <!-- Scan line -->
   <div id="scan-line"></div>
-
-  <!-- Threat ring -->
   <div id="threat-ring"></div>
 
   <!-- Top bar -->
   <div id="top-bar">
     <div class="logo">
       <div class="dot" id="live-dot"></div>
-      APLAWS v1.0
+      APLAWS v2.0
     </div>
     <div id="status-text" class="clear">CLEAR</div>
   </div>
+  <button id="debug-btn" onclick="toggleDebug()">DEBUG</button>
 
   <!-- Alert banner -->
   <div id="alert-banner">
-    <span id="alert-text">⚠ CABLE DETECTED — PULL UP</span>
+    <span id="alert-text">⚠ CABLE DETECTED — CAUTION</span>
   </div>
 
   <!-- Bottom panel -->
   <div id="bottom-panel">
     <div class="metrics">
       <div class="metric">
-        <div class="label">Lines</div>
-        <div class="value" id="m-lines">0</div>
+        <div class="label">Cables</div>
+        <div class="value" id="m-cables">0</div>
       </div>
       <div class="metric">
         <div class="label">Threat</div>
         <div class="value" id="m-threat">LOW</div>
+      </div>
+      <div class="metric">
+        <div class="label">Sag</div>
+        <div class="value" id="m-sag">--</div>
       </div>
       <div class="metric">
         <div class="label">FPS</div>
@@ -452,15 +330,15 @@
       </div>
     </div>
 
-    <div class="ctrl-row" style="margin-bottom:10px">
+    <div class="ctrl-row">
       <label>SENSITIVITY</label>
       <input type="range" id="sens-slider" min="1" max="10" value="5">
       <span class="ctrl-val" id="sens-val">5</span>
     </div>
-    <div class="ctrl-row" style="margin-bottom:12px">
-      <label>MIN LENGTH</label>
-      <input type="range" id="len-slider" min="5" max="60" value="20">
-      <span class="ctrl-val" id="len-val">20%</span>
+    <div class="ctrl-row">
+      <label>SAG TOLERANCE</label>
+      <input type="range" id="sag-slider" min="1" max="15" value="6">
+      <span class="ctrl-val" id="sag-val">6px</span>
     </div>
 
     <button id="start-btn" onclick="toggleDetection()">START DETECTION</button>
@@ -468,60 +346,47 @@
 </div>
 
 <script>
-// ─── State ───────────────────────────────────────────────────────
-let stream = null;
-let detecting = false;
-let animFrame = null;
-let lastTime = 0;
-let fps = 0;
-let fpsSmooth = 0;
-let frameCount = 0;
-let detectedLines = [];
+// ─── State ────────────────────────────────────────────────────────
+let stream = null, detecting = false, animFrame = null;
+let lastTime = 0, fpsSmooth = 0;
 let threatLevel = 'LOW';
-let alertCooldown = 0;
+let showDebug = false;
+let confirmedCables = [];
 
-const video = document.getElementById('video');
-const canvasProc = document.getElementById('canvas-proc');
-const canvasMain = document.getElementById('canvas-main');
-const ctx = canvasMain.getContext('2d');
-const ctxP = canvasProc.getContext('2d', { willReadFrequently: true });
+const video    = document.getElementById('video');
+const canvasP  = document.getElementById('canvas-proc');
+const canvasM  = document.getElementById('canvas-main');
+const ctx      = canvasM.getContext('2d');
+const ctxP     = canvasP.getContext('2d', { willReadFrequently: true });
+
+// Processing resolution — kept small for mobile performance
+const PW = 320, PH = 240;
 
 // ─── Launch ───────────────────────────────────────────────────────
 async function launchApp() {
   const startup = document.getElementById('startup');
+  const constraints = { video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } } };
   try {
-    stream = await navigator.mediaDevices.getUserMedia({
-      video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } }
-    });
-    video.srcObject = stream;
-    await new Promise(res => video.onloadedmetadata = res);
-    startup.style.animation = 'fadeOut 0.5s ease forwards';
-    setTimeout(() => { startup.style.display = 'none'; }, 500);
-    resizeCanvases();
+    stream = await navigator.mediaDevices.getUserMedia(constraints);
   } catch(e) {
-    // Try front camera as fallback
-    try {
-      stream = await navigator.mediaDevices.getUserMedia({ video: true });
-      video.srcObject = stream;
-      await new Promise(res => video.onloadedmetadata = res);
-      startup.style.animation = 'fadeOut 0.5s ease forwards';
-      setTimeout(() => { startup.style.display = 'none'; }, 500);
-      resizeCanvases();
-    } catch(e2) {
-      alert('Camera access denied. Please allow camera permission and try again.');
-    }
+    try { stream = await navigator.mediaDevices.getUserMedia({ video: true }); }
+    catch(e2) { alert('Camera permission denied.'); return; }
   }
+  video.srcObject = stream;
+  await new Promise(r => video.onloadedmetadata = r);
+  startup.style.animation = 'fadeOut 0.5s ease forwards';
+  setTimeout(() => startup.style.display = 'none', 500);
+  resizeCanvases();
 }
 
 function resizeCanvases() {
-  canvasMain.width = window.innerWidth;
-  canvasMain.height = window.innerHeight;
-  canvasProc.width = 320;
-  canvasProc.height = 240;
+  canvasM.width = window.innerWidth;
+  canvasM.height = window.innerHeight;
+  canvasP.width = PW; canvasP.height = PH;
 }
 window.addEventListener('resize', resizeCanvases);
 
-// ─── Toggle Detection ─────────────────────────────────────────────
+// ─── Controls ─────────────────────────────────────────────────────
 function toggleDetection() {
   detecting = !detecting;
   const btn = document.getElementById('start-btn');
@@ -535,273 +400,349 @@ function toggleDetection() {
     btn.classList.remove('running');
     document.getElementById('live-dot').style.background = 'var(--clear)';
     if (animFrame) cancelAnimationFrame(animFrame);
-    ctx.clearRect(0, 0, canvasMain.width, canvasMain.height);
-    setThreat('LOW', 0);
+    ctx.clearRect(0, 0, canvasM.width, canvasM.height);
+    setThreat('LOW', []);
   }
 }
 
-// ─── Sliders ─────────────────────────────────────────────────────
+function toggleDebug() {
+  showDebug = !showDebug;
+  document.getElementById('debug-btn').style.color =
+    showDebug ? 'var(--warn)' : 'rgba(0,255,160,0.4)';
+}
+
 document.getElementById('sens-slider').addEventListener('input', function() {
   document.getElementById('sens-val').textContent = this.value;
 });
-document.getElementById('len-slider').addEventListener('input', function() {
-  document.getElementById('len-val').textContent = this.value + '%';
+document.getElementById('sag-slider').addEventListener('input', function() {
+  document.getElementById('sag-val').textContent = this.value + 'px';
 });
 
-// ─── Core Detection Loop ──────────────────────────────────────────
+// ─── Main Detection Loop ──────────────────────────────────────────
 function processFrame(timestamp) {
   if (!detecting) return;
   animFrame = requestAnimationFrame(processFrame);
 
-  // FPS
-  const dt = timestamp - lastTime;
-  lastTime = timestamp;
-  fps = dt > 0 ? 1000 / dt : 0;
-  fpsSmooth = fpsSmooth * 0.85 + fps * 0.15;
+  const dt = timestamp - lastTime; lastTime = timestamp;
+  fpsSmooth = fpsSmooth * 0.85 + (dt > 0 ? 1000/dt : 0) * 0.15;
   document.getElementById('m-fps').textContent = Math.round(fpsSmooth);
-  if (alertCooldown > 0) alertCooldown--;
 
-  // Draw video to small canvas for processing
   if (video.readyState < 2) return;
-  ctxP.drawImage(video, 0, 0, 320, 240);
 
-  const imageData = ctxP.getImageData(0, 0, 320, 240);
-  const edges = cannyEdgeDetect(imageData.data, 320, 240);
-  const lines = probabilisticHough(edges, 320, 240);
+  ctxP.drawImage(video, 0, 0, PW, PH);
+  const imageData = ctxP.getImageData(0, 0, PW, PH);
 
-  detectedLines = lines;
-  renderOverlay(lines);
-  updateThreat(lines);
+  const edges = sobelEdges(imageData.data, PW, PH);
+  const candidates = extractEdgeChains(edges, PW, PH);
+  confirmedCables = candidates.filter(isCableCandidate);
+
+  renderOverlay(confirmedCables, edges);
+  setThreat(scoreThreat(confirmedCables), confirmedCables);
 }
 
-// ─── Canny-lite Edge Detection ────────────────────────────────────
-function cannyEdgeDetect(data, w, h) {
-  const gray = new Float32Array(w * h);
+// ─── Step 1: Sobel Edge Detection ────────────────────────────────
+function sobelEdges(data, w, h) {
+  const gray  = new Float32Array(w * h);
+  const blurr = new Float32Array(w * h);
   const edges = new Uint8Array(w * h);
 
-  // Grayscale
   for (let i = 0; i < w * h; i++) {
     const p = i * 4;
-    gray[i] = 0.299 * data[p] + 0.587 * data[p+1] + 0.114 * data[p+2];
+    gray[i] = 0.299*data[p] + 0.587*data[p+1] + 0.114*data[p+2];
   }
 
-  // Gaussian blur (3x3)
-  const blur = new Float32Array(w * h);
-  const kernel = [1,2,1,2,4,2,1,2,1];
+  // Gaussian blur
+  const K = [1,2,1,2,4,2,1,2,1];
   for (let y = 1; y < h-1; y++) {
     for (let x = 1; x < w-1; x++) {
-      let s = 0;
-      let ki = 0;
-      for (let dy = -1; dy <= 1; dy++) {
-        for (let dx = -1; dx <= 1; dx++) {
-          s += gray[(y+dy)*w+(x+dx)] * kernel[ki++];
-        }
-      }
-      blur[y*w+x] = s / 16;
+      let s = 0, ki = 0;
+      for (let dy = -1; dy <= 1; dy++)
+        for (let dx = -1; dx <= 1; dx++)
+          s += gray[(y+dy)*w+(x+dx)] * K[ki++];
+      blurr[y*w+x] = s / 16;
     }
   }
 
-  // Sobel gradient magnitude
   const sens = parseInt(document.getElementById('sens-slider').value);
-  const threshold = 80 - sens * 7; // higher sens = lower threshold
+  const thr = 85 - sens * 7;
 
   for (let y = 1; y < h-1; y++) {
     for (let x = 1; x < w-1; x++) {
       const gx =
-        -blur[(y-1)*w+(x-1)] + blur[(y-1)*w+(x+1)]
-        -2*blur[y*w+(x-1)]   + 2*blur[y*w+(x+1)]
-        -blur[(y+1)*w+(x-1)] + blur[(y+1)*w+(x+1)];
+        -blurr[(y-1)*w+(x-1)] + blurr[(y-1)*w+(x+1)]
+        -2*blurr[y*w+(x-1)]   + 2*blurr[y*w+(x+1)]
+        -blurr[(y+1)*w+(x-1)] + blurr[(y+1)*w+(x+1)];
       const gy =
-        -blur[(y-1)*w+(x-1)] - 2*blur[(y-1)*w+x] - blur[(y-1)*w+(x+1)]
-        +blur[(y+1)*w+(x-1)] + 2*blur[(y+1)*w+x] + blur[(y+1)*w+(x+1)];
-      const mag = Math.sqrt(gx*gx + gy*gy);
-      edges[y*w+x] = mag > threshold ? 255 : 0;
+        -blurr[(y-1)*w+(x-1)] - 2*blurr[(y-1)*w+x] - blurr[(y-1)*w+(x+1)]
+        +blurr[(y+1)*w+(x-1)] + 2*blurr[(y+1)*w+x] + blurr[(y+1)*w+(x+1)];
+      edges[y*w+x] = Math.sqrt(gx*gx + gy*gy) > thr ? 255 : 0;
     }
   }
   return edges;
 }
 
-// ─── Probabilistic Hough Transform ───────────────────────────────
-function probabilisticHough(edges, w, h) {
-  const minLenPct = parseInt(document.getElementById('len-slider').value) / 100;
-  const minLen = Math.min(w, h) * minLenPct;
-  const maxGap = 8;
-  const lines = [];
+// ─── Step 2: Extract Edge Chains (connected pixel runs) ──────────
+// Instead of Hough lines, we trace connected edge pixels into chains.
+// This preserves the CURVE shape of the edge for catenary analysis.
+function extractEdgeChains(edges, w, h) {
+  const visited = new Uint8Array(w * h);
+  const chains = [];
 
-  // Sample edge pixels and do Hough accumulation
-  const edgePts = [];
   for (let y = 2; y < h-2; y++) {
     for (let x = 2; x < w-2; x++) {
-      if (edges[y*w+x] === 255) edgePts.push([x, y]);
-    }
-  }
+      if (edges[y*w+x] !== 255 || visited[y*w+x]) continue;
 
-  if (edgePts.length < 20) return lines;
+      // BFS to trace connected edge pixels
+      const chain = [];
+      const queue = [[x, y]];
+      visited[y*w+x] = 1;
 
-  // Hough accumulator
-  const dRho = 2;
-  const dTheta = Math.PI / 90;
-  const numTheta = 90;
-  const maxRho = Math.ceil(Math.sqrt(w*w + h*h));
-  const numRho = Math.ceil(2 * maxRho / dRho);
-  const acc = new Int32Array(numRho * numTheta);
+      while (queue.length > 0) {
+        const [cx, cy] = queue.shift();
+        chain.push([cx, cy]);
 
-  const cosT = [], sinT = [];
-  for (let t = 0; t < numTheta; t++) {
-    const theta = t * dTheta;
-    cosT[t] = Math.cos(theta);
-    sinT[t] = Math.sin(theta);
-  }
-
-  // Sample up to 2000 points
-  const sample = edgePts.length > 2000
-    ? edgePts.filter(() => Math.random() < 2000 / edgePts.length)
-    : edgePts;
-
-  for (const [x, y] of sample) {
-    for (let t = 0; t < numTheta; t++) {
-      const rho = x * cosT[t] + y * sinT[t];
-      const ri = Math.round((rho + maxRho) / dRho);
-      if (ri >= 0 && ri < numRho) acc[ri * numTheta + t]++;
-    }
-  }
-
-  // Find peaks
-  const sens = parseInt(document.getElementById('sens-slider').value);
-  const threshold = Math.max(8, 20 - sens * 1.5);
-  const peaks = [];
-
-  for (let ri = 1; ri < numRho-1; ri++) {
-    for (let t = 1; t < numTheta-1; t++) {
-      const v = acc[ri*numTheta+t];
-      if (v < threshold) continue;
-      if (v >= acc[(ri-1)*numTheta+t] && v >= acc[(ri+1)*numTheta+t] &&
-          v >= acc[ri*numTheta+(t-1)] && v >= acc[ri*numTheta+(t+1)]) {
-        peaks.push({ rho: (ri * dRho) - maxRho, theta: t * dTheta, votes: v });
+        // Check 8-connected neighbours
+        for (let dy = -1; dy <= 1; dy++) {
+          for (let dx = -1; dx <= 1; dx++) {
+            if (dx === 0 && dy === 0) continue;
+            const nx = cx+dx, ny = cy+dy;
+            if (nx < 0 || nx >= w || ny < 0 || ny >= h) continue;
+            if (edges[ny*w+nx] === 255 && !visited[ny*w+nx]) {
+              visited[ny*w+nx] = 1;
+              queue.push([nx, ny]);
+            }
+          }
+        }
       }
+
+      if (chain.length >= 12) chains.push(chain);
     }
   }
-
-  peaks.sort((a,b) => b.votes - a.votes);
-  const topPeaks = peaks.slice(0, 15);
-
-  // Convert peaks to line segments
-  for (const peak of topPeaks) {
-    const { rho, theta } = peak;
-    const cosA = Math.cos(theta), sinA = Math.sin(theta);
-
-    // Find extent along line direction
-    let pts = [];
-    for (const [x, y] of sample) {
-      const dist = Math.abs(x * cosA + y * sinA - rho);
-      if (dist < 3) pts.push([x, y]);
-    }
-    if (pts.length < 4) continue;
-
-    // Project onto line direction
-    const dx = -sinA, dy = cosA;
-    pts.sort((a,b) => (a[0]*dx + a[1]*dy) - (b[0]*dx + b[1]*dy));
-
-    // Find longest segment with max gap
-    let seg = [pts[0]], bestSeg = null, bestLen = 0;
-    for (let i = 1; i < pts.length; i++) {
-      const gap = (pts[i][0]-pts[i-1][0])*dx + (pts[i][1]-pts[i-1][1])*dy;
-      if (gap > maxGap) {
-        const len = Math.hypot(seg[seg.length-1][0]-seg[0][0], seg[seg.length-1][1]-seg[0][1]);
-        if (len > bestLen) { bestLen = len; bestSeg = seg; }
-        seg = [pts[i]];
-      } else {
-        seg.push(pts[i]);
-      }
-    }
-    const lastLen = Math.hypot(seg[seg.length-1][0]-seg[0][0], seg[seg.length-1][1]-seg[0][1]);
-    if (lastLen > bestLen) { bestLen = lastLen; bestSeg = seg; }
-
-    if (bestLen >= minLen && bestSeg) {
-      lines.push({
-        x1: bestSeg[0][0], y1: bestSeg[0][1],
-        x2: bestSeg[bestSeg.length-1][0], y2: bestSeg[bestSeg.length-1][1],
-        rho, theta, votes: peak.votes, len: bestLen
-      });
-    }
-  }
-
-  return lines;
+  return chains;
 }
 
-// ─── Render Overlay ───────────────────────────────────────────────
-function renderOverlay(lines) {
-  const W = canvasMain.width, H = canvasMain.height;
-  const sw = W / 320, sh = H / 240;
+// ─── Step 3: Cable Candidate Filter — THE CORE ALGORITHM ─────────
+//
+// A real suspended cable has these mathematical properties:
+//
+// 1. SPAN: Long enough to cross a meaningful width of frame (cable,
+//    not a leaf edge)
+//
+// 2. HORIZONTAL BIAS: Near-horizontal (cables hang between poles,
+//    poles are vertical — so the cable spans horizontally)
+//
+// 3. CATENARY SAG — the KEY insight from your suggestion:
+//    - Fit a parabola y = ax² + bx + c to the chain points
+//    - A real cable: residuals are LOW (points fit the curve well)
+//      AND the 'a' coefficient is SMALL but NON-ZERO (slight sag)
+//    - A perfectly straight fence edge: residuals are low but a ≈ 0
+//    - Random grass/vegetation: residuals are HIGH (chaotic, no curve)
+//    - A lattice/diagonal: fails the horizontal bias test
+//
+// 4. CONSISTENCY: Points are evenly distributed along the span
+//    (cables are continuous, not patchy like vegetation edges)
+//
+function isCableCandidate(chain) {
+  if (chain.length < 15) return false;
+
+  // ── Compute bounding box ──
+  let minX = Infinity, maxX = -Infinity;
+  let minY = Infinity, maxY = -Infinity;
+  for (const [x, y] of chain) {
+    if (x < minX) minX = x; if (x > maxX) maxX = x;
+    if (y < minY) minY = y; if (y > maxY) maxY = y;
+  }
+
+  const spanX = maxX - minX;
+  const spanY = maxY - minY;
+
+  // ── 1. SPAN CHECK: must cross at least 15% of frame width ──
+  if (spanX < PW * 0.15) return false;
+
+  // ── 2. HORIZONTAL BIAS: width must be > 2x height ──
+  // This rejects steep diagonals, vertical fence posts, etc.
+  if (spanX < spanY * 2.0) return false;
+
+  // ── 3. CATENARY/CURVE FIT ──
+  // Fit parabola y = ax² + bx + c using least squares
+  // Normalise x to [0,1] for numerical stability
+  const pts = chain;
+  const n = pts.length;
+  const xScale = spanX > 0 ? 1 / spanX : 1;
+
+  let S1=0, Sx=0, Sx2=0, Sx3=0, Sx4=0;
+  let Sy=0, Sxy=0, Sx2y=0;
+
+  for (const [px, py] of pts) {
+    const xn = (px - minX) * xScale; // normalised 0..1
+    const x2 = xn*xn, x3 = x2*xn, x4 = x3*xn;
+    S1  += 1;
+    Sx  += xn;  Sx2 += x2; Sx3 += x3; Sx4 += x4;
+    Sy  += py;  Sxy += xn*py; Sx2y += x2*py;
+  }
+
+  // Solve 3x3 system [S1 Sx Sx2; Sx Sx2 Sx3; Sx2 Sx3 Sx4] * [c;b;a] = [Sy;Sxy;Sx2y]
+  // Using Cramer's rule
+  const A = [
+    [S1,  Sx,  Sx2],
+    [Sx,  Sx2, Sx3],
+    [Sx2, Sx3, Sx4]
+  ];
+  const B = [Sy, Sxy, Sx2y];
+  const det3 = (m) =>
+    m[0][0]*(m[1][1]*m[2][2]-m[1][2]*m[2][1])
+   -m[0][1]*(m[1][0]*m[2][2]-m[1][2]*m[2][0])
+   +m[0][2]*(m[1][0]*m[2][1]-m[1][1]*m[2][0]);
+
+  const D = det3(A);
+  if (Math.abs(D) < 1e-10) return false;
+
+  const Ac = JSON.parse(JSON.stringify(A));
+  const Ab = JSON.parse(JSON.stringify(A));
+  const Aa = JSON.parse(JSON.stringify(A));
+  for (let i = 0; i < 3; i++) {
+    Ac[i][0] = B[i];
+    Ab[i][1] = B[i];
+    Aa[i][2] = B[i];
+  }
+
+  const coeffC = det3(Ac) / D;
+  const coeffB = det3(Ab) / D;
+  const coeffA = det3(Aa) / D; // curvature — key value!
+
+  // Compute residuals (how well points fit the parabola)
+  let sumResid2 = 0;
+  for (const [px, py] of pts) {
+    const xn = (px - minX) * xScale;
+    const yFit = coeffA*xn*xn + coeffB*xn + coeffC;
+    const r = py - yFit;
+    sumResid2 += r*r;
+  }
+  const rmse = Math.sqrt(sumResid2 / n);
+
+  // ── 4. SAG CHECK (your key insight) ──
+  // The parabola coefficient 'a' encodes sag:
+  // - a = 0 → perfectly straight line (fence edge, building roof)
+  // - a small positive → gentle downward sag (CABLE signature)
+  // - a very large → too curved (probably not a cable)
+  // - a negative → upward curve (ignore)
+  //
+  // Scale 'a' back to pixel space: actual sag ≈ a * spanX²
+  const sagPx = Math.abs(coeffA) * spanX * spanX * xScale * xScale;
+  // (coeffA is in normalised coords, so multiply by spanX² to get pixels)
+  const sagActual = Math.abs(coeffA) * spanX * spanX;
+
+  const sagMin = parseFloat(document.getElementById('sag-slider').value);
+  const sagMax = sagMin * 20; // reject wildly curved things
+
+  // RMSE threshold — points must fit the parabola reasonably well
+  const rmseMax = 6.0;
+
+  // ── Verdict ──
+  const hasSag         = sagActual >= sagMin && sagActual <= sagMax;
+  const fitsParabola   = rmse < rmseMax;
+  const notStraight    = Math.abs(coeffA) * spanX * spanX > sagMin * 0.5;
+
+  // Store metrics on the chain for display
+  chain._sag  = Math.round(sagActual * 10) / 10;
+  chain._rmse = Math.round(rmse * 10) / 10;
+  chain._a    = coeffA;
+  chain._span = spanX;
+  chain._minX = minX; chain._minY = minY; chain._maxX = maxX;
+
+  return hasSag && fitsParabola && notStraight;
+}
+
+// ─── Step 4: Render ───────────────────────────────────────────────
+function renderOverlay(cables, edges) {
+  const W = canvasM.width, H = canvasM.height;
+  const sx = W / PW, sy = H / PH;
   ctx.clearRect(0, 0, W, H);
 
-  if (lines.length === 0) return;
+  // Debug: show edge pixels
+  if (showDebug) {
+    ctx.fillStyle = 'rgba(0,255,160,0.25)';
+    for (let y = 0; y < PH; y++) {
+      for (let x = 0; x < PW; x++) {
+        if (edges[y*PW+x] === 255) {
+          ctx.fillRect(x*sx, y*sy, sx, sy);
+        }
+      }
+    }
+  }
 
-  for (const line of lines) {
-    const x1 = line.x1 * sw, y1 = line.y1 * sh;
-    const x2 = line.x2 * sw, y2 = line.y2 * sh;
-
-    // Threat-colored line
+  for (const chain of cables) {
     const color = threatLevel === 'CRITICAL' ? '#ff2d2d'
                 : threatLevel === 'HIGH'     ? '#ff6b00'
                 : '#ffd60a';
 
-    // Glow effect
-    ctx.save();
-    ctx.strokeStyle = color;
-    ctx.lineWidth = 3;
-    ctx.shadowColor = color;
-    ctx.shadowBlur = 12;
-    ctx.beginPath();
-    ctx.moveTo(x1, y1);
-    ctx.lineTo(x2, y2);
-    ctx.stroke();
-    ctx.restore();
+    // Draw the actual curve shape (not a straight line!)
+    if (chain.length > 1) {
+      ctx.save();
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 3;
+      ctx.shadowColor = color;
+      ctx.shadowBlur = 14;
+      ctx.lineJoin = 'round';
+      ctx.lineCap = 'round';
+      ctx.beginPath();
 
-    // Endpoint markers
+      // Sort chain by x for clean curve drawing
+      const sorted = [...chain].sort((a,b) => a[0]-b[0]);
+      ctx.moveTo(sorted[0][0]*sx, sorted[0][1]*sy);
+      for (let i = 1; i < sorted.length; i++) {
+        ctx.lineTo(sorted[i][0]*sx, sorted[i][1]*sy);
+      }
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    // Endpoint dots
+    const sorted = [...chain].sort((a,b) => a[0]-b[0]);
+    const p1 = sorted[0], p2 = sorted[sorted.length-1];
     ctx.fillStyle = color;
-    ctx.beginPath();
-    ctx.arc(x1, y1, 5, 0, Math.PI*2);
-    ctx.fill();
-    ctx.beginPath();
-    ctx.arc(x2, y2, 5, 0, Math.PI*2);
-    ctx.fill();
+    ctx.beginPath(); ctx.arc(p1[0]*sx, p1[1]*sy, 6, 0, Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc(p2[0]*sx, p2[1]*sy, 6, 0, Math.PI*2); ctx.fill();
 
-    // Angle label
-    const angle = Math.round(Math.abs(line.theta * 180 / Math.PI));
-    const mx = (x1+x2)/2, my = (y1+y2)/2;
+    // Label: sag value
+    const mx = ((p1[0]+p2[0])/2)*sx;
+    const my = ((p1[1]+p2[1])/2)*sy - 10;
     ctx.font = '500 11px "Share Tech Mono", monospace';
     ctx.fillStyle = 'rgba(255,255,255,0.9)';
-    ctx.fillText(`${angle}°`, mx + 6, my - 6);
+    ctx.fillText(`SAG ${chain._sag}px`, mx - 20, my);
   }
 
-  // Count label
-  if (lines.length > 0) {
-    ctx.font = '500 12px "Share Tech Mono", monospace';
-    ctx.fillStyle = 'rgba(0,255,160,0.7)';
-    ctx.fillText(`${lines.length} LINE${lines.length>1?'S':''} DETECTED`, 16, H - 190);
+  // Update sag display
+  if (cables.length > 0) {
+    const maxSag = Math.max(...cables.map(c => c._sag));
+    document.getElementById('m-sag').textContent = maxSag + 'px';
+    document.getElementById('m-sag').className = 'value ' + (maxSag > 20 ? 'red' : 'amber');
+  } else {
+    document.getElementById('m-sag').textContent = '--';
+    document.getElementById('m-sag').className = 'value';
   }
 }
 
-// ─── Threat Assessment ────────────────────────────────────────────
-function updateThreat(lines) {
-  const n = lines.length;
-  document.getElementById('m-lines').textContent = n;
-
-  let level = 'LOW';
-  if (n >= 3) level = 'CRITICAL';
-  else if (n >= 2) level = 'HIGH';
-  else if (n >= 1) level = 'MEDIUM';
-
-  setThreat(level, n);
+// ─── Threat Scoring ───────────────────────────────────────────────
+function scoreThreat(cables) {
+  if (cables.length === 0) return 'LOW';
+  if (cables.length >= 3)  return 'CRITICAL';
+  if (cables.length >= 2)  return 'HIGH';
+  return 'MEDIUM';
 }
 
-function setThreat(level, count) {
+function setThreat(level, cables) {
   threatLevel = level;
   const statusEl = document.getElementById('status-text');
   const bannerEl = document.getElementById('alert-banner');
   const threatEl = document.getElementById('m-threat');
-  const ring = document.getElementById('threat-ring');
+  const cablesEl = document.getElementById('m-cables');
+  const ring     = document.getElementById('threat-ring');
+
+  cablesEl.textContent = cables.length;
+  threatEl.textContent = level;
+  threatEl.className = 'value ' +
+    (level==='CRITICAL'?'red':level==='HIGH'||level==='MEDIUM'?'amber':'green');
 
   statusEl.className = '';
   if (level === 'CRITICAL' || level === 'HIGH') {
@@ -809,11 +750,12 @@ function setThreat(level, count) {
     statusEl.textContent = '⚠ THREAT';
     bannerEl.classList.add('visible');
     document.getElementById('alert-text').textContent =
-      level === 'CRITICAL' ? '⚠ MULTIPLE CABLES — IMMEDIATE HAZARD' : '⚠ CABLE DETECTED — CAUTION';
+      level === 'CRITICAL'
+        ? '⚠ MULTIPLE CABLES — IMMEDIATE HAZARD'
+        : '⚠ CABLE DETECTED — CAUTION';
     ring.classList.add('visible');
-    ring.style.width = ring.style.height = '80px';
-    ring.style.left = (canvasMain.width / 2) + 'px';
-    ring.style.top = (canvasMain.height / 2) + 'px';
+    ring.style.cssText += ';width:80px;height:80px;left:' +
+      (canvasM.width/2) + 'px;top:' + (canvasM.height/2) + 'px';
   } else if (level === 'MEDIUM') {
     statusEl.className = 'warn';
     statusEl.textContent = 'CAUTION';
@@ -825,9 +767,6 @@ function setThreat(level, count) {
     bannerEl.classList.remove('visible');
     ring.classList.remove('visible');
   }
-
-  threatEl.textContent = level;
-  threatEl.className = 'value ' + (level==='CRITICAL'?'red':level==='HIGH'||level==='MEDIUM'?'amber':'');
 }
 </script>
 </body>
