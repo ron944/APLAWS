@@ -148,7 +148,7 @@
     <p>v3.2 — Sky-zone isolation, catenary detection, and proximity threat assessment at 160 knots. Displays time-to-impact per cable based on visual distance cues.</p>
     <div class="tag-row">
       <span class="tag blue">SKY DETECTION</span>
-      <span class="tag new">v3.2 STRICT</span>
+      <span class="tag new">v3.3</span>
       <span class="tag">MOTION ANALYSIS</span>
       <span class="tag">CATENARY FIT</span>
       <span class="tag">TAUT WIRE MODE</span>
@@ -171,7 +171,7 @@
   <div id="sky-label">SKY ZONE</div>
 
   <div id="top-bar">
-    <div class="logo"><div class="dot" id="live-dot"></div>APLAWS v3.2</div>
+    <div class="logo"><div class="dot" id="live-dot"></div>APLAWS v3.3</div>
     <div id="status-text" class="clear">CLEAR</div>
   </div>
 
@@ -220,15 +220,15 @@
 </div>
 
 <script>
+// APLAWS v3.3
 const PW=320,PH=240;
-const SPEED_MS=82.3; // 160 knots
+const SPEED_MS=82.3;
 
 let stream=null,detecting=false,animFrame=null;
 let lastTime=0,fpsSmooth=0,flashPhase=0;
 let threatLevel='LOW';
 let detectionMode='auto';
-let skyTop=0,skyBot=PH*0.5;
-let frameHistory=[];
+let skyTop=0,skyBot=PH*0.6;
 
 const video=document.getElementById('video');
 const canvasP=document.getElementById('canvas-proc');
@@ -236,81 +236,36 @@ const canvasM=document.getElementById('canvas-main');
 const ctx=canvasM.getContext('2d');
 const ctxP=canvasP.getContext('2d',{willReadFrequently:true});
 
-// ─── Launch ───────────────────────────────────────────────────────
 async function launchApp(){
   const startup=document.getElementById('startup');
-  try{
-    stream=await navigator.mediaDevices.getUserMedia({
-      video:{facingMode:'environment',width:{ideal:1280},height:{ideal:720}}});
-  }catch(e){
-    try{stream=await navigator.mediaDevices.getUserMedia({video:true});}
-    catch(e2){alert('Camera permission denied.');return;}
-  }
+  try{stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:'environment',width:{ideal:1280},height:{ideal:720}}});}
+  catch(e){try{stream=await navigator.mediaDevices.getUserMedia({video:true});}catch(e2){alert('Camera permission denied.');return;}}
   video.srcObject=stream;
   await new Promise(r=>video.onloadedmetadata=r);
   startup.style.animation='fadeOut 0.5s ease forwards';
   setTimeout(()=>startup.style.display='none',500);
   resizeCanvases();
 }
-function resizeCanvases(){
-  canvasM.width=window.innerWidth;canvasM.height=window.innerHeight;
-  canvasP.width=PW;canvasP.height=PH;
-}
+function resizeCanvases(){canvasM.width=window.innerWidth;canvasM.height=window.innerHeight;canvasP.width=PW;canvasP.height=PH;}
 window.addEventListener('resize',resizeCanvases);
 
-function setMode(m){
-  detectionMode=m;
-  ['auto','sky','motion','taut'].forEach(id=>{
-    document.getElementById('btn-'+id).classList.toggle('active',id===m);
-  });
-}
+function setMode(m){detectionMode=m;['auto','sky','motion','taut'].forEach(id=>{document.getElementById('btn-'+id).classList.toggle('active',id===m);});}
 function toggleDetection(){
   detecting=!detecting;
   const btn=document.getElementById('start-btn');
-  if(detecting){
-    btn.textContent='STOP DETECTION';btn.classList.add('running');
-    document.getElementById('live-dot').style.background='var(--danger)';
-    frameHistory=[];
-    requestAnimationFrame(processFrame);
-  }else{
-    btn.textContent='START DETECTION';btn.classList.remove('running');
-    document.getElementById('live-dot').style.background='var(--clear)';
-    if(animFrame)cancelAnimationFrame(animFrame);
-    ctx.clearRect(0,0,canvasM.width,canvasM.height);
-    setThreat('CLEAR',[]);
-  }
+  if(detecting){btn.textContent='STOP DETECTION';btn.classList.add('running');document.getElementById('live-dot').style.background='var(--danger)';requestAnimationFrame(processFrame);}
+  else{btn.textContent='START DETECTION';btn.classList.remove('running');document.getElementById('live-dot').style.background='var(--clear)';if(animFrame)cancelAnimationFrame(animFrame);ctx.clearRect(0,0,canvasM.width,canvasM.height);setThreat('CLEAR',[]);}
 }
-document.getElementById('sens-slider').addEventListener('input',function(){
-  document.getElementById('sens-val').textContent=this.value;});
-document.getElementById('sky-slider').addEventListener('input',function(){
-  document.getElementById('sky-val').textContent=this.value;});
-document.getElementById('sag-slider').addEventListener('input',function(){
-  document.getElementById('sag-val').textContent=this.value+'px';});
-
+document.getElementById('sens-slider').addEventListener('input',function(){document.getElementById('sens-val').textContent=this.value;});
+document.getElementById('sky-slider').addEventListener('input',function(){document.getElementById('sky-val').textContent=this.value;});
+document.getElementById('sag-slider').addEventListener('input',function(){document.getElementById('sag-val').textContent=this.value+'px';});
 function applyPreset(name){
-  const presets={
-    day:{sens:7,sky:7,sag:3},
-    haze:{sens:8,sky:3,sag:5},
-    dusk:{sens:9,sky:2,sag:6},
-    reset:{sens:7,sky:7,sag:3}
-  };
-  const p=presets[name];if(!p)return;
-  document.getElementById('sens-slider').value=p.sens;
-  document.getElementById('sens-val').textContent=p.sens;
-  document.getElementById('sky-slider').value=p.sky;
-  document.getElementById('sky-val').textContent=p.sky;
-  document.getElementById('sag-slider').value=p.sag;
-  document.getElementById('sag-val').textContent=p.sag+'px';
-  document.querySelectorAll('[onclick^="applyPreset"]').forEach(b=>{
-    if(b.getAttribute('onclick')===`applyPreset('${name}')`){
-      b.style.color='var(--scan)';b.style.borderColor='var(--scan)';
-      b.style.background='rgba(0,255,160,0.12)';
-      setTimeout(()=>{b.style.color='';b.style.borderColor='';b.style.background='';},900);
-    }
-  });
+  const p={day:{sens:7,sky:5,sag:3},haze:{sens:8,sky:3,sag:5},dusk:{sens:9,sky:2,sag:6},reset:{sens:7,sky:5,sag:3}}[name];
+  if(!p)return;
+  ['sens','sky','sag'].forEach(k=>{document.getElementById(k+'-slider').value=p[k];document.getElementById(k+'-val').textContent=p[k]+(k==='sag'?'px':'');});
+  document.querySelectorAll('[onclick^="applyPreset"]').forEach(b=>{if(b.getAttribute('onclick')===`applyPreset('${name}')`){b.style.color='var(--scan)';b.style.borderColor='var(--scan)';b.style.background='rgba(0,255,160,0.12)';setTimeout(()=>{b.style.color='';b.style.borderColor='';b.style.background='';},900);}});
 }
 
-// ─── Main Loop ────────────────────────────────────────────────────
 function processFrame(timestamp){
   if(!detecting)return;
   animFrame=requestAnimationFrame(processFrame);
@@ -318,328 +273,227 @@ function processFrame(timestamp){
   fpsSmooth=fpsSmooth*0.85+(dt>0?1000/dt:0)*0.15;
   document.getElementById('m-fps').textContent=Math.round(fpsSmooth);
   if(video.readyState<2)return;
-
   ctxP.drawImage(video,0,0,PW,PH);
   const imageData=ctxP.getImageData(0,0,PW,PH);
-  const gray=toGray(imageData.data);
   detectSkyZone(imageData.data);
-  const edges=sobelEdges(gray);
-
-  // Store frame for temporal consistency
-  frameHistory.push({gray:gray.slice(),edges:edges.slice()});
-  if(frameHistory.length>8)frameHistory.shift();
-
-  const cables=findCables(edges,imageData.data,gray);
-  renderOverlay(cables,imageData.data);
+  const cables=findCables(imageData.data);
+  renderOverlay(cables);
   setThreat(scoreThreat(cables),cables);
 }
 
-function toGray(data){
-  const g=new Float32Array(PW*PH);
-  for(let i=0;i<PW*PH;i++){
-    const p=i*4;g[i]=0.299*data[p]+0.587*data[p+1]+0.114*data[p+2];
-  }
-  return g;
-}
-
-// ─── Sky Zone Detection ───────────────────────────────────────────
-// Scans every column to find the LOWEST sky pixel per column,
-// then takes the median. This correctly handles rooflines, trees and
-// clouds that interrupt the sky band at different heights.
+// ─── Sky Zone Detection v3.3 ──────────────────────────────────────
+// KEY FIX: Use per-row 88th-percentile brightness as the sky reference
+// instead of absolute thresholds. This handles portrait mode black bars,
+// clouds, and varying light conditions automatically.
 function detectSkyZone(data){
   const skyThr=parseInt(document.getElementById('sky-slider').value);
-  // Lower threshold = more permissive sky detection (for hazy/cloudy days)
-  const threshold=0.30+(skyThr*0.04);
+  const rowSkyScore=new Float32Array(PH);
 
-  // Per-row sky fraction
-  const rowScore=new Float32Array(PH);
   for(let y=0;y<PH;y++){
-    let n=0;
+    // Build brightness array for this row
+    const bright=new Float32Array(PW);
+    let sumR=0,sumG=0,sumB=0;
     for(let x=0;x<PW;x++){
       const p=(y*PW+x)*4;
       const r=data[p],g=data[p+1],b=data[p+2];
-      const mx=Math.max(r,g,b),mn=Math.min(r,g,b);
-      const sat=mx>0?(mx-mn)/mx:0;
-      // Sky: blue-dominant OR bright white/grey (clouds, overcast)
-      if((b>=r&&b>=g&&b>100&&sat<0.55)||(mx>180&&sat<0.18))n++;
+      bright[x]=(r+g+b)/3;
+      sumR+=r;sumG+=g;sumB+=b;
     }
-    rowScore[y]=n/PW;
+    const avgR=sumR/PW,avgG=sumG/PW,avgB=sumB/PW;
+    const avgBright=(avgR+avgG+avgB)/3;
+
+    // Sky criteria: row is bright AND blue-ish dominant
+    // Use relative colour balance — works in all lighting
+    const isBlueDom=avgB>avgR*0.95&&avgB>avgG*0.92;
+    const isBright=avgBright>90;
+    const isWhite=avgBright>170&&Math.abs(avgR-avgB)<30&&Math.abs(avgG-avgB)<30;
+    rowSkyScore[y]=(isBright&&(isBlueDom||isWhite))?1:0;
+    // Partial credit for marginal rows
+    if(!rowSkyScore[y]&&avgBright>70&&isBlueDom)rowSkyScore[y]=0.5;
   }
 
-  // Find sky band — allow larger gaps (clouds, wires interrupt rows)
-  let top=0,bot=0,inSky=false,gapCount=0;
+  // Find the sky band — first contiguous region scoring > 0
+  const minScore=0.4;
+  let top=-1,bot=0,gap=0;
   for(let y=0;y<PH;y++){
-    if(rowScore[y]>=threshold){
-      if(!inSky){top=y;inSky=true;}
-      bot=y;gapCount=0;
-    }else if(inSky){
-      gapCount++;
-      if(gapCount>12)break; // allow bigger gaps — wires & rooflines break rows
+    if(rowSkyScore[y]>=minScore){
+      if(top<0)top=y;
+      bot=y;gap=0;
+    }else if(top>=0){
+      gap++;
+      if(gap>15)break; // clouds & wires create gaps up to 15 rows
     }
   }
+  if(top<0){top=0;bot=Math.floor(PH*0.4);} // fallback if sky not found
 
   skyTop=Math.max(0,top);
-  // Extend well below detected sky bottom: cables hang at sky/terrain boundary
-  skyBot=Math.min(PH-1,bot+22);
+  // Extend 25px below: wires hang at the bottom edge of sky zone
+  skyBot=Math.min(PH-1,bot+25);
 
-  const skyPct=Math.round(((skyBot-skyTop)/PH)*100);
-  document.getElementById('m-sky').textContent=skyPct+'%';
-  document.getElementById('m-sky').className='value '+(skyPct>20?'green':skyPct>6?'amber':'red');
-
-  const W=canvasM.width,H=canvasM.height,scaleY=H/PH;
+  const pct=Math.round(((skyBot-skyTop)/PH)*100);
+  document.getElementById('m-sky').textContent=pct+'%';
+  document.getElementById('m-sky').className='value '+(pct>20?'green':pct>6?'amber':'red');
+  const W=canvasM.width,H=canvasM.height,scY=H/PH;
   const bar=document.getElementById('sky-bar');
-  bar.style.top=(skyTop*scaleY+56)+'px';
-  bar.style.height=((skyBot-skyTop)*scaleY)+'px';
-  document.getElementById('sky-label').style.top=((skyTop*scaleY)+62)+'px';
+  bar.style.top=(skyTop*scY+56)+'px';
+  bar.style.height=((skyBot-skyTop)*scY)+'px';
+  document.getElementById('sky-label').style.top=((skyTop*scY)+62)+'px';
 }
 
-// ─── Sobel Edge Detection ─────────────────────────────────────────
-function sobelEdges(gray){
-  const blur=new Float32Array(PW*PH),edges=new Uint8Array(PW*PH);
-  const K=[1,2,1,2,4,2,1,2,1];
-  for(let y=1;y<PH-1;y++)for(let x=1;x<PW-1;x++){
-    let s=0,ki=0;
-    for(let dy=-1;dy<=1;dy++)for(let dx=-1;dx<=1;dx++)
-      s+=gray[(y+dy)*PW+(x+dx)]*K[ki++];
-    blur[y*PW+x]=s/16;
-  }
+// ─── Cable Detection v3.3 ─────────────────────────────────────────
+// KEY FIX: Use 88th-percentile brightness per row as reference.
+// This is robust — it represents the bright sky background while
+// ignoring the wire pixels themselves (which pull average down).
+// Wire = any pixel significantly darker than the bright background.
+function findCables(data){
+  if(skyBot<=skyTop+2)return[];
+
   const sens=parseInt(document.getElementById('sens-slider').value);
-  const thr=90-sens*7; // higher sensitivity = lower threshold
-  for(let y=1;y<PH-1;y++)for(let x=1;x<PW-1;x++){
-    const gx=-blur[(y-1)*PW+(x-1)]+blur[(y-1)*PW+(x+1)]-2*blur[y*PW+(x-1)]+2*blur[y*PW+(x+1)]-blur[(y+1)*PW+(x-1)]+blur[(y+1)*PW+(x+1)];
-    const gy=-blur[(y-1)*PW+(x-1)]-2*blur[(y-1)*PW+x]-blur[(y-1)*PW+(x+1)]+blur[(y+1)*PW+(x-1)]+2*blur[(y+1)*PW+x]+blur[(y+1)*PW+(x+1)];
-    edges[y*PW+x]=Math.sqrt(gx*gx+gy*gy)>thr?255:0;
-  }
-  return edges;
-}
-
-// ─── Cable Detection — Strict Sky-Zone Line Scanning ─────────────
-//
-// COMPLETE REDESIGN based on lessons from testing:
-//
-// The core problem was that we had 3 strategies all detecting the same
-// cable plus each others false positives. Now there is ONE primary
-// strategy: scan horizontal pixel rows STRICTLY inside the sky zone
-// for dark continuous streaks. This is the most reliable approach
-// for the actual use case (helicopter approaching cables against sky).
-//
-// Key rules that eliminate false positives:
-// 1. ONLY detect within confirmed sky zone rows — no sky, no detection
-// 2. Each detected cable must appear in MULTIPLE consecutive rows
-//    (cables have physical thickness; a single-row hit is noise)
-// 3. The streak must be DARKER than the local sky brightness above it
-//    by a meaningful margin (cloud edges won't pass this)
-// 4. After grouping, a cable cluster must have a consistent x-position
-//    across its rows (genuine cable vs. diffuse cloud boundary)
-// 5. Hard cap of MAX 6 reported cables to prevent alert fatigue
-//
-function findCables(edges,colorData,gray){
-  if(skyBot<=skyTop+3)return[];
-
-  const minSpanPx=PW*0.18; // must span 22% of frame minimum
-  const rowHits=[]; // detected streaks per row
+  // Contrast gap required: higher sensitivity = smaller gap needed
+  const contrastGap=28-(sens*2); // sens=7 -> gap=14; sens=10 -> gap=8
+  const minSpan=PW*0.18;
+  const rowHits=[];
 
   for(let y=skyTop;y<=skyBot;y++){
-    // Measure sky brightness 4 rows above this line
-    let skyRef=200;
-    if(y>=5){
-      let sum=0,cnt=0;
-      for(let x=0;x<PW;x+=3){
-        const p=((y-4)*PW+x)*4;
-        sum+=(colorData[p]+colorData[p+1]+colorData[p+2])/3;cnt++;
-      }
-      skyRef=sum/cnt;
+    // Build sorted brightness values to get percentile
+    const bright=new Array(PW);
+    for(let x=0;x<PW;x++){
+      const p=(y*PW+x)*4;bright[x]=(data[p]+data[p+1]+data[p+2])/3;
     }
+    // 88th percentile = sky brightness (ignores dark wire pixels)
+    const sorted=[...bright].sort((a,b)=>a-b);
+    const skyRef=sorted[Math.floor(PW*0.88)];
 
-    // Only scan rows that are reasonably bright (sky context)
-    let rowBright=0;
-    for(let x=0;x<PW;x+=4){
-      const p=(y*PW+x)*4;
-      rowBright+=(colorData[p]+colorData[p+1]+colorData[p+2])/3;
-    }
-    rowBright/=(PW/4);
-    if(rowBright<55)continue; // lowered from 80 — wires near roofline are darker
+    // Skip rows that are too dark to be sky context (black UI bars, ground)
+    if(skyRef<75)continue;
 
-    // Cable threshold: must be darker than sky reference by at least 18
-    // Thin distant wires have low contrast — keep threshold permissive
-    const cableThr=skyRef-18;
+    const wireThr=skyRef-contrastGap;
 
-    // Scan for dark runs
-    let runStart=-1,runLen=0;
+    // Scan for dark runs (wires)
+    let start=-1,len=0;
     const runs=[];
     for(let x=0;x<PW;x++){
-      const p=(y*PW+x)*4;
-      const bright=(colorData[p]+colorData[p+1]+colorData[p+2])/3;
-      if(bright<cableThr&&bright<175){
-        if(runStart<0)runStart=x;runLen++;
+      if(bright[x]<=wireThr){
+        if(start<0)start=x;len++;
       }else{
-        if(runLen>=4)runs.push({x1:runStart,x2:runStart+runLen-1,len:runLen});
-        runStart=-1;runLen=0;
+        if(len>=4)runs.push({x1:start,x2:start+len-1,span:len,skyRef,wireThr});
+        start=-1;len=0;
       }
     }
-    if(runLen>=4)runs.push({x1:runStart,x2:runStart+runLen-1,len:runLen});
+    if(len>=4)runs.push({x1:start,x2:start+len-1,span:len,skyRef,wireThr});
 
-    // Keep runs spanning minimum required width
     for(const r of runs){
-      if(r.x2-r.x1>=minSpanPx)rowHits.push({y,x1:r.x1,x2:r.x2,span:r.x2-r.x1});
+      if(r.span>=minSpan)rowHits.push({y,...r});
     }
   }
 
-  if(rowHits.length===0)return[];
+  if(!rowHits.length)return[];
 
-  // ── Group rows into cable objects ──────────────────────────────
-  // Sort by y, then cluster rows that are close vertically AND x-aligned
+  // Cluster by vertical proximity and x-alignment
   rowHits.sort((a,b)=>a.y-b.y);
   const clusters=[];
-
   for(const hit of rowHits){
-    // Find existing cluster this row belongs to
     const match=clusters.find(cl=>{
-      const last=cl.rows[cl.rows.length-1];
-      // Must be within 5 rows vertically
-      if(hit.y-last.y>5)return false;
-      // x-centers must be close (< 15% of frame)
+      const last=cl[cl.length-1];
+      if(hit.y-last.y>8)return false;
       const cA=(hit.x1+hit.x2)/2,cB=(last.x1+last.x2)/2;
-      return Math.abs(cA-cB)<PW*0.15;
+      return Math.abs(cA-cB)<PW*0.18;
     });
-    if(match)match.rows.push(hit);
-    else clusters.push({rows:[hit]});
+    if(match)match.push(hit);
+    else clusters.push([hit]);
   }
 
-  // ── Validate clusters: thin wires may only hit 1 row — allow single row
-  // but require slightly longer span to compensate for reduced confidence
+  // Accept clusters: 2+ rows OR single long row
   const valid=clusters.filter(cl=>{
-    if(cl.rows.length>=2)return true;
-    // Single row hit: only accept if span is very long (>30% of frame)
-    const span=Math.max(...cl.rows.map(r=>r.span));
-    return span>PW*0.30;
+    if(cl.length>=2)return true;
+    return cl[0].span>PW*0.28;
   });
 
-  // ── Build cable objects from clusters ──────────────────────────
+  // Build cable objects
   const cables=valid.map(cl=>{
-    const x1=Math.min(...cl.rows.map(r=>r.x1));
-    const x2=Math.max(...cl.rows.map(r=>r.x2));
-    const ys=cl.rows.map(r=>r.y);
-    const yMid=Math.round(ys.reduce((s,v)=>s+v,0)/ys.length);
-    const span=x2-x1;
-
-    // Measure actual contrast for proximity scoring
-    let onBright=0,aboveBright=0,n=0;
-    for(let x=x1;x<=x2;x+=4){
+    const x1=Math.min(...cl.map(r=>r.x1));
+    const x2=Math.max(...cl.map(r=>r.x2));
+    const yMid=Math.round(cl.reduce((s,r)=>s+r.y,0)/cl.length);
+    const skyRef=cl[0].skyRef;
+    // Contrast = how much darker wire is than sky (higher = closer/thicker)
+    let wireBright=0,n=0;
+    for(let x=x1;x<=x2;x+=3){
       if(x>=PW)break;
-      const pOn=(yMid*PW+x)*4;
-      onBright+=(colorData[pOn]+colorData[pOn+1]+colorData[pOn+2])/3;
-      if(yMid>3){
-        const pAb=((yMid-3)*PW+x)*4;
-        aboveBright+=(colorData[pAb]+colorData[pAb+1]+colorData[pAb+2])/3;
-      }
-      n++;
+      const p=(yMid*PW+x)*4;
+      wireBright+=(data[p]+data[p+1]+data[p+2])/3;n++;
     }
-    const contrast=n>0?Math.max(0,aboveBright/n-onBright/n):0;
-
-    return{x1,y1:yMid,x2,y2:yMid,_span:span,_contrast:contrast,
-      _rowCount:cl.rows.length,_method:'CABLE',
+    const contrast=n>0?skyRef-(wireBright/n):0;
+    return{x1,y1:yMid,x2,y2:yMid,_span:x2-x1,_contrast:contrast,
+      _rows:cl.length,_skyRef:skyRef,_method:'CABLE',
       points:[[x1,yMid],[x2,yMid]]};
   });
 
-  // ── Sort by span descending, cap at 6 cables ──────────────────
-  // Longest spans are most likely real cables (not noise)
   cables.sort((a,b)=>b._span-a._span);
-  const top=cables.slice(0,6);
-
-  // ── Score proximity for each confirmed cable ──────────────────
-  top.forEach(c=>scoreProximity(c,colorData));
-
-  return top;
+  const top6=cables.slice(0,6);
+  top6.forEach(c=>scoreProximity(c));
+  return top6;
 }
 
 // ─── Proximity Scoring ────────────────────────────────────────────
-// Three visual cues combined into a 0-1 proximity score:
-// 1. Vertical position in sky zone (cables drop toward horizon as you approach)
-// 2. Contrast (atmospheric haze reduces contrast at distance)
-// 3. Span fraction (cables subtend wider angle when closer)
-function scoreProximity(cable,colorData){
-  const skyRange=skyBot-skyTop;
-  if(skyRange<=0){cable._zone='ADVISORY';cable._timeToImpact='>15s';cable._color='#ffd60a';cable._estDist='>1.2km';return;}
+function scoreProximity(cable){
+  const skyRange=Math.max(1,skyBot-skyTop);
+  const cY=(cable.y1+cable.y2)/2;
 
-  const cableY=(cable.y1+cable.y2)/2;
-  // Vertical: 0=top of sky, 1=bottom/below sky
-  let vertScore=cableY<=skyTop?0.05:cableY>=skyBot?1.0:(cableY-skyTop)/skyRange;
+  // 1. Vertical position — how far down in sky zone (0=top, 1=bottom/below)
+  const vertScore=cY<=skyTop?0.05:cY>=skyBot?1.0:(cY-skyTop)/skyRange;
 
-  // Contrast: normalised 0-1 (higher=closer)
-  const contrastScore=Math.min(1,Math.max(0,(cable._contrast||0)/60));
+  // 2. Contrast — darker wire vs sky = closer/thicker wire
+  const contrastScore=Math.min(1,Math.max(0,(cable._contrast||0)/50));
 
-  // Span: fraction of frame width
+  // 3. Span fraction
   const spanScore=Math.min(1,cable._span/(PW*0.75));
 
-  // Weighted combination
   const score=vertScore*0.55+contrastScore*0.25+spanScore*0.20;
   cable._proxScore=score;
 
-  // Map to 160kt threat zones
-  if(score>=0.85){
-    cable._zone='IMMINENT';cable._timeToImpact='<1s';
-    cable._color='#ff0000';cable._estDist='<80m';
-  }else if(score>=0.70){
-    cable._zone='CRITICAL';cable._timeToImpact='1-3s';
-    cable._color='#ff2d2d';cable._estDist='80-250m';
-  }else if(score>=0.50){
-    cable._zone='WARNING';cable._timeToImpact='3-8s';
-    cable._color='#ff6b00';cable._estDist='250-650m';
-  }else if(score>=0.28){
-    cable._zone='CAUTION';cable._timeToImpact='8-15s';
-    cable._color='#ff9500';cable._estDist='650m-1.2km';
-  }else{
-    cable._zone='ADVISORY';cable._timeToImpact='>15s';
-    cable._color='#ffd60a';cable._estDist='>1.2km';
-  }
+  if(score>=0.85){cable._zone='IMMINENT';cable._timeToImpact='<1s';cable._color='#ff0000';cable._estDist='<80m';}
+  else if(score>=0.70){cable._zone='CRITICAL';cable._timeToImpact='1-3s';cable._color='#ff2d2d';cable._estDist='80-250m';}
+  else if(score>=0.50){cable._zone='WARNING';cable._timeToImpact='3-8s';cable._color='#ff6b00';cable._estDist='250-650m';}
+  else if(score>=0.28){cable._zone='CAUTION';cable._timeToImpact='8-15s';cable._color='#ff9500';cable._estDist='650m-1.2km';}
+  else{cable._zone='ADVISORY';cable._timeToImpact='>15s';cable._color='#ffd60a';cable._estDist='>1.2km';}
 }
 
 // ─── Render ───────────────────────────────────────────────────────
-function renderOverlay(cables,colorData){
-  const W=canvasM.width,H=canvasM.height;
-  const sx=W/PW,sy=H/PH;
+function renderOverlay(cables){
+  const W=canvasM.width,H=canvasM.height,sx=W/PW,sy=H/PH;
   ctx.clearRect(0,0,W,H);
   flashPhase=(flashPhase+0.18)%(Math.PI*2);
-
-  // Draw distant cables first, closest on top
   const sorted=[...cables].sort((a,b)=>(a._proxScore||0)-(b._proxScore||0));
 
-  for(const cable of sorted){
-    const color=cable._color||'#ffd60a';
-    const zone=cable._zone||'ADVISORY';
+  for(const c of sorted){
+    const color=c._color||'#ffd60a';
+    const zone=c._zone||'ADVISORY';
     const thick=zone==='IMMINENT'?5:zone==='CRITICAL'?4:zone==='WARNING'?3:2;
-    const alpha=zone==='IMMINENT'?0.6+0.4*Math.sin(flashPhase*5):1.0;
+    const alpha=zone==='IMMINENT'?0.55+0.45*Math.sin(flashPhase*5):1.0;
 
     ctx.save();
     ctx.globalAlpha=alpha;
-    ctx.strokeStyle=color;
-    ctx.lineWidth=thick;
-    ctx.shadowColor=color;
-    ctx.shadowBlur=zone==='IMMINENT'?22:10;
+    ctx.strokeStyle=color;ctx.lineWidth=thick;
+    ctx.shadowColor=color;ctx.shadowBlur=zone==='IMMINENT'?22:10;
     ctx.lineCap='round';
-
-    // Draw as a clean straight line (cables ARE straight in sky)
     ctx.beginPath();
-    ctx.moveTo(cable.x1*sx,cable.y1*sy);
-    ctx.lineTo(cable.x2*sx,cable.y2*sy);
+    ctx.moveTo(c.x1*sx,c.y1*sy);ctx.lineTo(c.x2*sx,c.y2*sy);
     ctx.stroke();
     ctx.restore();
 
-    // Endpoint dots
     ctx.globalAlpha=alpha;
     ctx.fillStyle=color;
-    ctx.beginPath();ctx.arc(cable.x1*sx,cable.y1*sy,thick+2,0,Math.PI*2);ctx.fill();
-    ctx.beginPath();ctx.arc(cable.x2*sx,cable.y2*sy,thick+2,0,Math.PI*2);ctx.fill();
+    ctx.beginPath();ctx.arc(c.x1*sx,c.y1*sy,thick+2,0,Math.PI*2);ctx.fill();
+    ctx.beginPath();ctx.arc(c.x2*sx,c.y2*sy,thick+2,0,Math.PI*2);ctx.fill();
     ctx.globalAlpha=1;
 
-    // Clean label: zone + time only, dark background for readability
-    const lx=(cable.x1+(cable.x2-cable.x1)*0.38)*sx;
-    const ly=cable.y1*sy-10;
-    const label=zone+' '+cable._timeToImpact;
+    // Label with dark background
+    const lx=(c.x1+(c.x2-c.x1)*0.35)*sx;
+    const ly=c.y1*sy-10;
+    const label=zone+' '+c._timeToImpact;
     ctx.font='bold 10px "Share Tech Mono",monospace';
     const tw=ctx.measureText(label).width;
-    ctx.fillStyle='rgba(0,0,0,0.6)';
+    ctx.fillStyle='rgba(0,0,0,0.65)';
     ctx.fillRect(lx-2,ly-13,tw+6,16);
     ctx.fillStyle=color;
     ctx.fillText(label,lx+1,ly);
@@ -652,65 +506,32 @@ function renderOverlay(cables,colorData){
   }
 }
 
-// ─── Threat Scoring ───────────────────────────────────────────────
+// ─── Threat & Display ─────────────────────────────────────────────
 function scoreThreat(cables){
   if(!cables.length)return'CLEAR';
-  const rank={'ADVISORY':1,'CAUTION':2,'WARNING':3,'CRITICAL':4,'IMMINENT':5};
-  const worst=cables.reduce((b,c)=>(rank[c._zone||'ADVISORY']||1)>(rank[b._zone||'ADVISORY']||1)?c:b,cables[0]);
-  return worst._zone||'ADVISORY';
+  const rank={ADVISORY:1,CAUTION:2,WARNING:3,CRITICAL:4,IMMINENT:5};
+  return cables.reduce((b,c)=>(rank[c._zone]||1)>(rank[b._zone]||1)?c:b,cables[0])._zone||'ADVISORY';
 }
 
 function setThreat(level,cables){
   threatLevel=level;
+  const worst=cables.length?cables.reduce((b,c)=>(c._proxScore||0)>(b._proxScore||0)?c:b,cables[0]):null;
+  document.getElementById('m-cables').textContent=cables.length;
+  document.getElementById('m-tti').textContent=worst?worst._timeToImpact:'--';
+  document.getElementById('m-tti').className='value '+(level==='IMMINENT'||level==='CRITICAL'?'red':level==='WARNING'||level==='CAUTION'?'amber':'green');
+  const short={CLEAR:'CLEAR',ADVISORY:'ADVSY',CAUTION:'CAUTN',WARNING:'WARN',CRITICAL:'CRIT',IMMINENT:'IMMIN'};
+  document.getElementById('m-threat').textContent=short[level]||level;
+  document.getElementById('m-threat').className='value '+(level==='IMMINENT'||level==='CRITICAL'?'red':level==='WARNING'||level==='CAUTION'?'amber':'green');
   const statusEl=document.getElementById('status-text');
   const bannerEl=document.getElementById('alert-banner');
-  const threatEl=document.getElementById('m-threat');
-  const cablesEl=document.getElementById('m-cables');
   const ring=document.getElementById('threat-ring');
-  const alertEl=document.getElementById('alert-text');
-
-  const zoneRank={'CLEAR':0,'ADVISORY':1,'CAUTION':2,'WARNING':3,'CRITICAL':4,'IMMINENT':5};
-  const worst=cables.length?cables.reduce((b,c)=>(c._proxScore||0)>(b._proxScore||0)?c:b,cables[0]):null;
-
-  cablesEl.textContent=cables.length;
-  document.getElementById('m-tti').textContent=worst?worst._timeToImpact:'--';
-  document.getElementById('m-tti').className='value '+
-    (level==='IMMINENT'||level==='CRITICAL'?'red':
-     level==='WARNING'||level==='CAUTION'?'amber':'green');
-
-  const short={CLEAR:'CLEAR',ADVISORY:'ADVSY',CAUTION:'CAUTN',WARNING:'WARN',CRITICAL:'CRIT',IMMINENT:'IMMIN'};
-  threatEl.textContent=short[level]||level;
-  threatEl.className='value '+(
-    level==='IMMINENT'||level==='CRITICAL'?'red':
-    level==='WARNING'||level==='CAUTION'?'amber':'green');
-
-  statusEl.className='';
-  ring.classList.remove('visible');
-  bannerEl.classList.remove('visible');
-
-  if(level==='IMMINENT'){
-    statusEl.className='danger';statusEl.textContent='IMMINENT';
-    bannerEl.classList.add('visible');
-    alertEl.textContent='⚠ PULL UP — CABLE AT IMPACT RANGE';
-    ring.classList.add('visible');
-    ring.style.cssText+=';width:90px;height:90px;left:'+(canvasM.width/2)+'px;top:'+(canvasM.height/2)+'px';
-  }else if(level==='CRITICAL'){
-    statusEl.className='danger';statusEl.textContent='CRITICAL';
-    bannerEl.classList.add('visible');
-    alertEl.textContent='⚠ CABLE — EVASIVE ACTION NOW';
-    ring.classList.add('visible');
-    ring.style.cssText+=';width:90px;height:90px;left:'+(canvasM.width/2)+'px;top:'+(canvasM.height/2)+'px';
-  }else if(level==='WARNING'){
-    statusEl.className='danger';statusEl.textContent='WARNING';
-    bannerEl.classList.add('visible');
-    alertEl.textContent='⚠ CABLE AHEAD — BEGIN AVOIDANCE';
-  }else if(level==='CAUTION'){
-    statusEl.className='warn';statusEl.textContent='CAUTION';
-  }else if(level==='ADVISORY'){
-    statusEl.className='warn';statusEl.textContent='ADVISORY';
-  }else{
-    statusEl.className='clear';statusEl.textContent='CLEAR';
-  }
+  statusEl.className='';ring.classList.remove('visible');bannerEl.classList.remove('visible');
+  if(level==='IMMINENT'){statusEl.className='danger';statusEl.textContent='IMMINENT';bannerEl.classList.add('visible');document.getElementById('alert-text').textContent='⚠ PULL UP — CABLE AT IMPACT RANGE';ring.classList.add('visible');ring.style.cssText+=';width:90px;height:90px;left:'+(canvasM.width/2)+'px;top:'+(canvasM.height/2)+'px';}
+  else if(level==='CRITICAL'){statusEl.className='danger';statusEl.textContent='CRITICAL';bannerEl.classList.add('visible');document.getElementById('alert-text').textContent='⚠ CABLE — EVASIVE ACTION NOW';ring.classList.add('visible');ring.style.cssText+=';width:90px;height:90px;left:'+(canvasM.width/2)+'px;top:'+(canvasM.height/2)+'px';}
+  else if(level==='WARNING'){statusEl.className='danger';statusEl.textContent='WARNING';bannerEl.classList.add('visible');document.getElementById('alert-text').textContent='⚠ CABLE AHEAD — BEGIN AVOIDANCE';}
+  else if(level==='CAUTION'){statusEl.className='warn';statusEl.textContent='CAUTION';}
+  else if(level==='ADVISORY'){statusEl.className='warn';statusEl.textContent='ADVISORY';}
+  else{statusEl.className='clear';statusEl.textContent='CLEAR';}
 }
 </script>
 </body>
