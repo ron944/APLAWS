@@ -3,262 +3,146 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>APLAWS — Active Power Line Advisory Warning System v4.9</title>
+<title>APLAWS v5 — Active Power Line Advisory Warning System</title>
 <style>
-  @import url('https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&family=Share+Tech+Mono&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Rajdhani:wght@500;600;700&display=swap');
 
-  :root {
-    --danger: #ff2d2d;
-    --warn: #ff9500;
-    --clear: #30d158;
-    --hud: rgba(0, 255, 160, 0.85);
-    --hud-dim: rgba(0, 255, 160, 0.35);
-    --bg: #050a0e;
-    --panel: rgba(5, 20, 15, 0.88);
-    --scan: #00ffa0;
-  }
+:root {
+  --danger:#ff2d2d; --warn:#ff9500; --clear:#00ff9f;
+  --bg:#030d07; --panel:rgba(3,18,10,0.92);
+  --scan:#00ff9f; --dim:rgba(0,255,159,0.35);
+  --blue:rgba(0,200,255,0.4);
+}
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{width:100%;height:100dvh;overflow:hidden;background:var(--bg);
+  font-family:'Share Tech Mono',monospace;color:var(--scan);touch-action:none}
 
-  * { margin: 0; padding: 0; box-sizing: border-box; }
+#app{position:relative;width:100%;height:100%}
 
-  body {
-    background: var(--bg);
-    font-family: 'Rajdhani', sans-serif;
-    color: var(--scan);
-    overflow: hidden;
-    height: 100dvh;
-    width: 100vw;
-    touch-action: none;
-  }
+/* Camera */
+#video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;z-index:0}
+#canvas-main{position:absolute;inset:0;width:100%;height:100%;z-index:1;pointer-events:none}
 
-  #app { position: relative; width: 100%; height: 100%; }
+/* Sky zone indicator */
+#sky-bar{position:absolute;left:8px;right:8px;border:1px dashed rgba(0,200,255,0.3);
+  border-radius:2px;z-index:2;pointer-events:none;transition:top 0.4s,height 0.4s}
+#sky-label{position:absolute;left:12px;font-size:9px;letter-spacing:2px;
+  color:rgba(0,200,255,0.4);z-index:2;pointer-events:none}
 
-  #video {
-    position: absolute; inset: 0;
-    width: 100%; height: 100%;
-    object-fit: cover; z-index: 0;
-  }
+/* Corner brackets */
+.corner{position:absolute;width:28px;height:28px;border-color:rgba(0,255,159,0.5);
+  border-style:solid;z-index:2;pointer-events:none}
+.corner.tl{top:62px;left:8px;border-width:2px 0 0 2px}
+.corner.tr{top:62px;right:8px;border-width:2px 2px 0 0}
+.corner.bl{bottom:0;left:8px;border-width:0 0 2px 2px} /* dynamic */
+.corner.br{bottom:0;right:8px;border-width:0 2px 2px 0}
 
-  #canvas-main {
-    position: absolute; inset: 0;
-    width: 100%; height: 100%;
-    z-index: 1; pointer-events: none;
-  }
+/* Scan line */
+#scan-line{position:absolute;left:8px;right:8px;height:1px;
+  background:linear-gradient(90deg,transparent,var(--scan),transparent);
+  opacity:0.25;z-index:2;animation:scanMove 3.5s linear infinite;pointer-events:none}
 
-  /* Corner brackets */
-  .corner {
-    position: absolute; width: 36px; height: 36px;
-    border-color: var(--hud); border-style: solid; opacity: 0.6;
-    z-index: 2; pointer-events: none;
-  }
-  .corner.tl { top: 60px; left: 12px; border-width: 2px 0 0 2px; }
-  .corner.tr { top: 60px; right: 12px; border-width: 2px 2px 0 0; }
-  .corner.bl { bottom: 210px; left: 12px; border-width: 0 0 2px 2px; }
-  .corner.br { bottom: 210px; right: 12px; border-width: 0 2px 2px 0; }
+/* Threat ring */
+#threat-ring{position:absolute;border-radius:50%;border:2px solid var(--danger);
+  pointer-events:none;opacity:0;transform:translate(-50%,-50%);z-index:3}
+#threat-ring.pulse{opacity:0.7;animation:ringPulse 0.7s ease-out infinite}
 
-  /* Top bar */
-  #top-bar {
-    position: absolute; top: 0; left: 0; right: 0; height: 56px;
-    background: var(--panel);
-    border-bottom: 1px solid rgba(0,255,160,0.2);
-    display: flex; align-items: center; justify-content: space-between;
-    padding: 0 16px; z-index: 10;
-    backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
-  }
+/* Top bar */
+#top-bar{position:absolute;top:0;left:0;right:0;height:56px;
+  background:var(--panel);border-bottom:1px solid rgba(0,255,159,0.15);
+  display:flex;align-items:center;justify-content:space-between;
+  padding:0 14px;z-index:10;backdrop-filter:blur(10px)}
+.logo{font-size:13px;letter-spacing:2px;display:flex;align-items:center;gap:8px}
+.logo-dot{width:8px;height:8px;border-radius:50%;background:var(--clear);
+  animation:dotPulse 1.6s ease-in-out infinite}
+#status-badge{font-size:11px;letter-spacing:1.5px;padding:5px 12px;
+  border-radius:3px;border:1px solid;transition:all 0.3s}
+#status-badge.clear{color:var(--clear);border-color:var(--clear);background:rgba(0,255,159,0.08)}
+#status-badge.warn{color:var(--warn);border-color:var(--warn);background:rgba(255,149,0,0.08)}
+#status-badge.danger{color:var(--danger);border-color:var(--danger);
+  background:rgba(255,45,45,0.1);animation:flashBg 0.5s ease-in-out infinite}
 
-  .logo {
-    font-family: 'Share Tech Mono', monospace;
-    font-size: 13px; letter-spacing: 2px; color: var(--scan);
-    display: flex; align-items: center; gap: 8px;
-  }
-  .logo .dot {
-    width: 7px; height: 7px; border-radius: 50%;
-    background: var(--clear); animation: pulse 1.4s ease-in-out infinite;
-  }
+/* Alert banner */
+#alert-banner{position:absolute;top:56px;left:0;right:0;height:0;overflow:hidden;
+  z-index:10;display:flex;align-items:center;justify-content:center;
+  background:rgba(255,45,45,0.88);backdrop-filter:blur(4px);transition:height 0.25s}
+#alert-banner.show{height:42px}
+#alert-text{font-size:13px;letter-spacing:3px;color:#fff;font-weight:600}
 
-  #status-text {
-    font-family: 'Share Tech Mono', monospace;
-    font-size: 11px; letter-spacing: 1px;
-    padding: 4px 10px; border-radius: 3px; border: 1px solid;
-    transition: all 0.3s;
-  }
-  #status-text.clear  { color: var(--clear); border-color: var(--clear); background: rgba(48,209,88,0.1); }
-  #status-text.warn   { color: var(--warn);  border-color: var(--warn);  background: rgba(255,149,0,0.1); }
-  #status-text.danger { color: var(--danger); border-color: var(--danger); background: rgba(255,45,45,0.15); animation: flashbg 0.4s ease-in-out infinite; }
+/* Bottom panel */
+#bottom-panel{position:absolute;bottom:0;left:0;right:0;
+  background:var(--panel);border-top:1px solid rgba(0,255,159,0.15);
+  backdrop-filter:blur(12px);padding:10px 12px 28px;z-index:10}
 
-  /* Alert banner */
-  #alert-banner {
-    position: absolute; top: 56px; left: 0; right: 0;
-    height: 0; overflow: hidden; z-index: 10;
-    transition: height 0.3s ease;
-    display: flex; align-items: center; justify-content: center;
-    background: rgba(255,45,45,0.92);
-    backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px);
-  }
-  #alert-banner.visible { height: 44px; }
-  #alert-banner span {
-    font-family: 'Share Tech Mono', monospace;
-    font-size: 14px; font-weight: 700;
-    letter-spacing: 3px; color: white; text-transform: uppercase;
-  }
+/* Metrics */
+.metrics{display:grid;grid-template-columns:repeat(4,1fr);gap:5px;margin-bottom:9px}
+.metric{background:rgba(0,255,159,0.05);border:1px solid rgba(0,255,159,0.12);
+  border-radius:6px;padding:6px 4px;text-align:center}
+.metric .lbl{font-size:8px;letter-spacing:1.5px;color:var(--dim);margin-bottom:2px}
+.metric .val{font-size:18px;font-weight:600;color:var(--scan);line-height:1}
+.metric .val.red{color:var(--danger)}
+.metric .val.amber{color:var(--warn)}
+.metric .val.green{color:var(--clear)}
 
-  /* Bottom panel */
-  #bottom-panel {
-    position: absolute; bottom: 0; left: 0; right: 0;
-    background: var(--panel);
-    border-top: 1px solid rgba(0,255,160,0.2);
-    backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
-    padding: 10px 16px 28px; z-index: 10;
-  }
+/* Flight mode buttons — PRIMARY, fat-finger safe */
+.mode-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:7px}
+.mode-btn{min-height:60px;padding:10px 4px;background:transparent;
+  border:2px solid rgba(0,255,159,0.25);border-radius:8px;
+  color:rgba(0,255,159,0.5);font-family:'Share Tech Mono',monospace;
+  font-size:11px;font-weight:600;letter-spacing:1px;cursor:pointer;
+  line-height:1.4;text-align:center;transition:all 0.2s}
+.mode-btn.active{background:rgba(0,255,159,0.1);border-color:var(--scan);color:var(--scan)}
+.mode-btn .sub{font-size:9px;opacity:0.55;font-weight:400;letter-spacing:0.5px;display:block}
 
-  .metrics {
-    display: grid; grid-template-columns: repeat(4, 1fr);
-    gap: 6px; margin-bottom: 10px;
-  }
+/* Preset buttons — SECONDARY */
+.preset-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:5px;margin-bottom:8px}
+.preset-btn{min-height:42px;padding:8px 2px;background:transparent;
+  border:1px solid rgba(0,255,159,0.2);border-radius:6px;
+  color:rgba(0,255,159,0.5);font-family:'Share Tech Mono',monospace;
+  font-size:10px;letter-spacing:1px;cursor:pointer;transition:all 0.15s}
+.preset-btn:active{background:rgba(0,255,159,0.1)}
+.preset-btn.reset-btn{border-color:rgba(0,255,159,0.4);color:rgba(0,255,159,0.7)}
 
-  .metric {
-    background: rgba(0,255,160,0.06);
-    border: 1px solid rgba(0,255,160,0.15);
-    border-radius: 6px; padding: 6px 8px; text-align: center;
-  }
-  .metric .label {
-    font-size: 8px; letter-spacing: 1.5px; color: var(--hud-dim);
-    text-transform: uppercase; font-family: 'Share Tech Mono', monospace;
-  }
-  .metric .value {
-    font-family: 'Share Tech Mono', monospace;
-    font-size: 17px; font-weight: 600; color: var(--scan);
-    line-height: 1.2; margin-top: 1px;
-  }
-  .metric .value.red   { color: var(--danger); }
-  .metric .value.amber { color: var(--warn); }
-  .metric .value.green { color: var(--clear); }
+/* Sliders */
+.slider-row{display:flex;align-items:center;gap:8px;margin-bottom:7px}
+.slider-row label{font-size:9px;letter-spacing:1px;color:var(--dim);min-width:40px}
+input[type=range]{flex:1;-webkit-appearance:none;height:4px;
+  background:rgba(0,255,159,0.2);border-radius:2px;outline:none}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:28px;height:28px;
+  border-radius:50%;background:var(--scan);cursor:pointer;
+  box-shadow:0 0 0 4px rgba(0,255,159,0.12)}
+.slider-val{font-size:12px;color:var(--scan);min-width:28px;text-align:right}
 
-  .ctrl-row {
-    display: flex; align-items: center; gap: 10px; margin-bottom: 8px;
-  }
-  .ctrl-row label {
-    font-size: 10px; letter-spacing: 1px; color: var(--hud-dim);
-    white-space: nowrap; font-family: 'Share Tech Mono', monospace;
-    min-width: 80px;
-  }
-  input[type=range] {
-    flex: 1; -webkit-appearance: none;
-    height: 3px; background: rgba(0,255,160,0.2);
-    border-radius: 2px; outline: none;
-  }
-  input[type=range]::-webkit-slider-thumb {
-    -webkit-appearance: none; width: 18px; height: 18px;
-    border-radius: 50%; background: var(--scan); cursor: pointer;
-  }
-  .ctrl-val {
-    font-family: 'Share Tech Mono', monospace; font-size: 12px;
-    color: var(--scan); min-width: 32px; text-align: right;
-  }
+/* START/STOP button */
+#start-btn{display:block;width:100%;padding:15px;background:transparent;
+  border:2px solid var(--scan);border-radius:8px;color:var(--scan);
+  font-family:'Share Tech Mono',monospace;font-size:14px;font-weight:600;
+  letter-spacing:4px;cursor:pointer;transition:all 0.2s}
+#start-btn:active{background:rgba(0,255,159,0.1)}
+#start-btn.running{border-color:var(--danger);color:var(--danger)}
 
-  #start-btn {
-    display: block; width: 100%; padding: 13px;
-    background: transparent; border: 1.5px solid var(--scan);
-    border-radius: 6px; color: var(--scan);
-    font-family: 'Rajdhani', sans-serif; font-size: 15px;
-    font-weight: 600; letter-spacing: 3px; text-transform: uppercase;
-    cursor: pointer; transition: background 0.2s;
-    margin-bottom: 0; pointer-events: all;
-    -webkit-tap-highlight-color: transparent;
-  }
-  #start-btn:active { background: rgba(0,255,160,0.15); }
-  #start-btn.running { border-color: var(--danger); color: var(--danger); }
+/* Startup screen */
+#startup{position:absolute;inset:0;background:var(--bg);z-index:100;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  gap:20px;padding:32px;transition:opacity 0.5s}
+#startup h1{font-size:36px;letter-spacing:8px;color:var(--scan);text-align:center}
+#startup .version{font-size:11px;letter-spacing:3px;color:var(--dim);margin-top:-12px}
+#startup p{font-size:13px;color:rgba(0,255,159,0.5);text-align:center;
+  line-height:1.7;max-width:320px}
+.warn-box{border:1px solid var(--warn);border-radius:6px;padding:14px;
+  background:rgba(255,149,0,0.06);width:100%;max-width:320px}
+.warn-box p{color:var(--warn);font-size:11px;line-height:1.6;letter-spacing:0.3px}
+#launch-btn{width:100%;max-width:300px;padding:18px;background:var(--scan);
+  border:none;border-radius:8px;color:#030d07;font-family:'Rajdhani',sans-serif;
+  font-size:17px;font-weight:700;letter-spacing:4px;cursor:pointer}
 
-  /* Startup screen */
-  #startup {
-    position: absolute; inset: 0; background: var(--bg);
-    z-index: 100; display: flex; flex-direction: column;
-    align-items: center; justify-content: center;
-    gap: 20px; padding: 32px; transition: opacity 0.5s;
-  }
-  #startup h1 {
-    font-family: 'Share Tech Mono', monospace;
-    font-size: 28px; letter-spacing: 6px; color: var(--scan);
-    text-align: center;
-  }
-  #startup .sub {
-    font-size: 11px; letter-spacing: 2px;
-    color: rgba(0,255,160,0.45); text-align: center; margin-top: -12px;
-    font-family: 'Share Tech Mono', monospace;
-  }
-  #startup p {
-    font-size: 14px; color: rgba(0,255,160,0.55);
-    text-align: center; line-height: 1.6; letter-spacing: 0.3px;
-  }
-  .tag-row {
-    display: flex; gap: 8px; flex-wrap: wrap; justify-content: center;
-  }
-  .tag {
-    font-family: 'Share Tech Mono', monospace; font-size: 10px;
-    letter-spacing: 1px; padding: 4px 10px;
-    border: 1px solid rgba(0,255,160,0.3); border-radius: 3px;
-    color: rgba(0,255,160,0.6);
-  }
-  .tag.new { border-color: var(--warn); color: var(--warn); }
-  .warn-box {
-    border: 1px solid var(--warn); border-radius: 6px;
-    padding: 12px 16px; background: rgba(255,149,0,0.07); width: 100%;
-  }
-  .warn-box p { color: var(--warn); font-size: 12px; line-height: 1.5; }
-  #launch-btn {
-    width: 100%; max-width: 300px; padding: 16px;
-    background: var(--scan); border: none; border-radius: 6px;
-    color: #050a0e; font-family: 'Rajdhani', sans-serif;
-    font-size: 16px; font-weight: 700; letter-spacing: 3px;
-    text-transform: uppercase; cursor: pointer;
-    -webkit-tap-highlight-color: transparent;
-  }
-
-  /* Scan line */
-  #scan-line {
-    position: absolute; left: 12px; right: 12px; height: 1px;
-    background: linear-gradient(90deg, transparent, var(--scan), transparent);
-    opacity: 0.4; z-index: 3;
-    animation: scanMove 3s linear infinite; pointer-events: none;
-  }
-
-  /* Threat ring */
-  #threat-ring {
-    position: absolute; border-radius: 50%;
-    border: 2px solid var(--danger); pointer-events: none;
-    opacity: 0; transform: translate(-50%, -50%);
-    transition: opacity 0.2s; z-index: 4;
-  }
-  #threat-ring.visible {
-    opacity: 0.8; animation: ringPulse 0.7s ease-out infinite;
-  }
-
-  /* Debug overlay toggle */
-  #debug-btn {
-    position: absolute; top: 16px; right: 70px;
-    font-family: 'Share Tech Mono', monospace; font-size: 9px;
-    letter-spacing: 1px; padding: 3px 7px;
-    border: 1px solid rgba(0,255,160,0.25); border-radius: 3px;
-    color: rgba(0,255,160,0.4); background: transparent;
-    cursor: pointer; z-index: 11;
-    -webkit-tap-highlight-color: transparent;
-  }
-
-  @keyframes pulse {
-    0%,100% { opacity: 1; transform: scale(1); }
-    50% { opacity: 0.4; transform: scale(0.8); }
-  }
-  @keyframes flashbg {
-    0%,100% { background: rgba(255,45,45,0.15); }
-    50% { background: rgba(255,45,45,0.35); }
-  }
-  @keyframes scanMove {
-    0% { top: 60px; } 100% { top: calc(100% - 210px); }
-  }
-  @keyframes ringPulse {
-    0% { transform: translate(-50%,-50%) scale(1); opacity: 0.8; }
-    100% { transform: translate(-50%,-50%) scale(1.5); opacity: 0; }
-  }
-  @keyframes fadeOut { to { opacity: 0; pointer-events: none; } }
+/* Animations */
+@keyframes dotPulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:0.3;transform:scale(0.7)}}
+@keyframes flashBg{0%,100%{background:rgba(255,45,45,0.1)}50%{background:rgba(255,45,45,0.25)}}
+@keyframes ringPulse{0%{transform:translate(-50%,-50%) scale(1);opacity:0.7}
+  100%{transform:translate(-50%,-50%) scale(1.6);opacity:0}}
+@keyframes scanMove{0%{top:62px}100%{top:60%}}
+@keyframes fadeOut{to{opacity:0;pointer-events:none}}
 </style>
 </head>
 <body>
@@ -267,16 +151,12 @@
   <!-- Startup -->
   <div id="startup">
     <h1>APLAWS</h1>
-    <p class="sub">Active Power Line Advisory Warning System</p>
-    <p>v4.9 — Local contrast wire scanning, temporal smoothing, audio alerts, sky zone guard, proximity scoring at 160 knots.</p>
-    <div class="tag-row">
-      <span class="tag">CATENARY DETECTION</span>
-      <span class="tag new">NEW v2</span>
-      <span class="tag">CURVE FITTING</span>
-      <span class="tag">FALSE-POSITIVE FILTER</span>
-    </div>
+    <p class="version">Active Power Line Advisory Warning System</p>
+    <p>v5.0 — Real-time powerline detection for helicopter operations. Sky zone isolation, local contrast scanning, time-to-impact at 160kt, audio alerts.</p>
     <div class="warn-box">
-      <p>⚠ PROTOTYPE — RESEARCH USE ONLY<br>Not certified for operational aviation use. Always follow official procedures.</p>
+      <p>⚠ PROTOTYPE — RESEARCH USE ONLY<br>
+      Not certified for operational aviation use.<br>
+      Always follow official aviation procedures.</p>
     </div>
     <button id="launch-btn" onclick="launchApp()">ACTIVATE SYSTEM</button>
   </div>
@@ -285,583 +165,569 @@
   <canvas id="canvas-proc" style="display:none"></canvas>
   <canvas id="canvas-main"></canvas>
 
-  <!-- HUD corners -->
-  <div class="corner tl"></div>
-  <div class="corner tr"></div>
-  <div class="corner bl"></div>
-  <div class="corner br"></div>
-
+  <div id="sky-bar"></div>
+  <div id="sky-label">SKY ZONE</div>
+  <div class="corner tl"></div><div class="corner tr"></div>
+  <div class="corner bl"></div><div class="corner br"></div>
   <div id="scan-line"></div>
-  <div id="sky-bar" style="position:absolute;left:12px;right:12px;border:1px dashed rgba(0,200,255,0.25);border-radius:3px;z-index:3;pointer-events:none;"></div>
-  <div id="sky-label" style="position:absolute;left:16px;font-family:'Share Tech Mono',monospace;font-size:9px;letter-spacing:1px;color:rgba(0,200,255,0.4);z-index:3;pointer-events:none;">SKY ZONE</div>
   <div id="threat-ring"></div>
 
   <!-- Top bar -->
   <div id="top-bar">
     <div class="logo">
-      <div class="dot" id="live-dot"></div>
-      APLAWS v4.9
+      <div class="logo-dot" id="live-dot"></div>
+      APLAWS v5.0
     </div>
-    <div id="status-text" class="clear">CLEAR</div>
+    <div id="status-badge" class="clear">CLEAR</div>
   </div>
-  <button id="debug-btn" onclick="toggleDebug()">DEBUG</button>
 
   <!-- Alert banner -->
-  <div id="alert-banner">
-    <span id="alert-text">⚠ CABLE DETECTED — CAUTION</span>
-  </div>
+  <div id="alert-banner"><span id="alert-text">⚠ CABLE AHEAD</span></div>
 
-  <!-- Bottom panel v4.6 — cockpit-grade large touch targets -->
+  <!-- Bottom panel -->
   <div id="bottom-panel">
 
+    <!-- Metrics row -->
     <div class="metrics">
-      <div class="metric"><div class="label">Cables</div><div class="value" id="m-cables">0</div></div>
-      <div class="metric"><div class="label">Threat</div><div class="value" id="m-threat">CLEAR</div></div>
-      <div class="metric"><div class="label">T-Impact</div><div class="value" id="m-tti">--</div></div>
-      <div class="metric"><div class="label">Sky% <span id="m-fps" style="font-size:8px;opacity:0.5"></span></div><div class="value" id="m-sky">--</div></div>
+      <div class="metric"><div class="lbl">CABLES</div><div class="val" id="m-cables">0</div></div>
+      <div class="metric"><div class="lbl">THREAT</div><div class="val" id="m-threat">CLEAR</div></div>
+      <div class="metric"><div class="lbl">T-IMPACT</div><div class="val" id="m-tti">--</div></div>
+      <div class="metric"><div class="lbl">SKY% <span id="m-fps" style="font-size:7px;opacity:0.4"></span></div><div class="val" id="m-sky">--</div></div>
     </div>
 
-    <!-- Flight phase — primary large buttons (fat-finger safe, min 56px tall) -->
-    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:7px">
-      <button id="mode-cruise" onclick="setFlightMode('cruise')"
-        style="padding:12px 4px;background:transparent;border:2px solid rgba(0,255,160,0.3);border-radius:8px;color:rgba(0,255,160,0.6);font-family:'Share Tech Mono',monospace;font-size:11px;font-weight:600;letter-spacing:1px;cursor:pointer;-webkit-tap-highlight-color:transparent;line-height:1.35;min-height:58px;text-align:center">
-        CRUISE<br><span style="font-size:9px;opacity:0.55;font-weight:400;letter-spacing:0.5px">sky zone on</span>
+    <!-- Flight phase — primary buttons -->
+    <div class="mode-grid">
+      <button class="mode-btn" id="mode-tol" onclick="setMode('tol')">
+        T/O · LDG<span class="sub">full frame</span>
       </button>
-      <button id="mode-tol" onclick="setFlightMode('tol')"
-        style="padding:12px 4px;background:rgba(0,255,160,0.12);border:2px solid var(--scan);border-radius:8px;color:var(--scan);font-family:'Share Tech Mono',monospace;font-size:11px;font-weight:600;letter-spacing:1px;cursor:pointer;-webkit-tap-highlight-color:transparent;line-height:1.35;min-height:58px;text-align:center">
-        T/O &middot; LDG<br><span style="font-size:9px;opacity:0.55;font-weight:400;letter-spacing:0.5px">full frame</span>
+      <button class="mode-btn" id="mode-cruise" onclick="setMode('cruise')">
+        CRUISE<span class="sub">sky zone on</span>
       </button>
-      <button id="mode-night" onclick="setFlightMode('night')"
-        style="padding:12px 4px;background:transparent;border:2px solid rgba(0,255,160,0.3);border-radius:8px;color:rgba(0,255,160,0.6);font-family:'Share Tech Mono',monospace;font-size:11px;font-weight:600;letter-spacing:1px;cursor:pointer;-webkit-tap-highlight-color:transparent;line-height:1.35;min-height:58px;text-align:center">
-        NIGHT<br><span style="font-size:9px;opacity:0.55;font-weight:400;letter-spacing:0.5px">max sensitivity</span>
+      <button class="mode-btn" id="mode-night" onclick="setMode('night')">
+        NIGHT<span class="sub">max sensitivity</span>
       </button>
     </div>
 
-    <!-- Condition presets — secondary row -->
-    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:5px;margin-bottom:8px">
-      <button onclick="applyPreset('day')"   style="min-height:42px;padding:8px 2px;background:transparent;border:1px solid rgba(0,255,160,0.25);border-radius:6px;color:rgba(0,255,160,0.55);font-family:'Share Tech Mono',monospace;font-size:10px;letter-spacing:1px;cursor:pointer;-webkit-tap-highlight-color:transparent">DAY</button>
-      <button onclick="applyPreset('haze')"  style="min-height:42px;padding:8px 2px;background:transparent;border:1px solid rgba(0,255,160,0.25);border-radius:6px;color:rgba(0,255,160,0.55);font-family:'Share Tech Mono',monospace;font-size:10px;letter-spacing:1px;cursor:pointer;-webkit-tap-highlight-color:transparent">HAZE</button>
-      <button onclick="applyPreset('dusk')"  style="min-height:42px;padding:8px 2px;background:transparent;border:1px solid rgba(0,255,160,0.25);border-radius:6px;color:rgba(0,255,160,0.55);font-family:'Share Tech Mono',monospace;font-size:10px;letter-spacing:1px;cursor:pointer;-webkit-tap-highlight-color:transparent">DUSK</button>
-      <button onclick="applyPreset('reset')" style="min-height:42px;padding:8px 2px;background:rgba(0,255,160,0.07);border:1px solid var(--scan);border-radius:6px;color:var(--scan);font-family:'Share Tech Mono',monospace;font-size:10px;letter-spacing:1px;cursor:pointer;-webkit-tap-highlight-color:transparent">RESET</button>
+    <!-- Condition presets -->
+    <div class="preset-grid">
+      <button class="preset-btn" onclick="applyPreset('day')">DAY</button>
+      <button class="preset-btn" onclick="applyPreset('haze')">HAZE</button>
+      <button class="preset-btn" onclick="applyPreset('dusk')">DUSK</button>
+      <button class="preset-btn reset-btn" onclick="applyPreset('reset')">RESET</button>
     </div>
 
     <!-- Sliders -->
-    <div class="ctrl-row" style="margin-bottom:7px">
+    <div class="slider-row">
       <label>SENS</label>
       <input type="range" id="sens-slider" min="1" max="10" value="8">
-      <span class="ctrl-val" id="sens-val">8</span>
+      <span class="slider-val" id="sens-val">8</span>
     </div>
-    <div class="ctrl-row" style="margin-bottom:10px">
+    <div class="slider-row" style="margin-bottom:10px">
       <label>SKY</label>
       <input type="range" id="sky-slider" min="1" max="10" value="2">
-      <span class="ctrl-val" id="sky-val">2</span>
+      <span class="slider-val" id="sky-val">2</span>
     </div>
 
-    <!-- START/STOP — biggest button, full width -->
+    <!-- Start/Stop -->
     <button id="start-btn" onclick="toggleDetection()">START DETECTION</button>
-
   </div>
+</div>
 
 <script>
-// APLAWS v4.9 — Clean rebuild: local contrast scanning + sky zone guard
-// Built from V2 baseline. V3.x enhancements applied selectively.
-//
-// WHAT WORKS (proven by pixel analysis across all test images):
-// - Local contrast: compare each pixel to 7px neighbours each side
-// - Wires found at contrast threshold 5-20 in ALL test conditions
-// - Works for horizontal, diagonal, dusk, bright day, low contrast
-//
-// WHAT'S NEW vs V2:
-// - Sky zone detection prevents false positives on fences/buildings
-// - No catenary check (V2 catenary failed on near-horizontal wires)
-// - No Hough (sky gradient flooded accumulator in V3.x)
-// - Proximity scoring gives pilot time-to-impact at 160kt
+// ═══════════════════════════════════════════════════════════════════
+// APLAWS v5.0 — Complete clean rebuild
+// Core algorithm proven across 11+ test images in v4.9b
+// All v4.x lessons incorporated — see APLAWS_v5_briefing.md
+// ═══════════════════════════════════════════════════════════════════
+const PW=320, PH=240, SPEED_MS=82.3;
 
-const PW=320,PH=240,SPEED_MS=82.3;
-let stream=null,detecting=false,animFrame=null;
-let lastTime=0,fpsSmooth=0,flashPhase=0;
-let skyTop=0,skyBot=120,skyValid=false;
-let flightMode='tol';
+// State
+let stream=null, detecting=false, animFrame=null;
+let lastTime=0, fpsSmooth=0, flashPhase=0;
+let flightMode='tol'; // default: T/O·LDG (flight starts on ground)
+let skyTop=0, skyBot=PH*0.6, skyValid=false;
+let cableHistory=[], lastSpeakTime=0, lastLevel='CLEAR';
+const HOLD_FRAMES=4;
 
-const video=document.getElementById('video');
-const canvasP=document.getElementById('canvas-proc');
-const canvasM=document.getElementById('canvas-main');
-const ctx=canvasM.getContext('2d');
-const ctxP=canvasP.getContext('2d',{willReadFrequently:true});
+const video    = document.getElementById('video');
+const canvasP  = document.getElementById('canvas-proc');
+const canvasM  = document.getElementById('canvas-main');
+const ctx      = canvasM.getContext('2d');
+const ctxP     = canvasP.getContext('2d', {willReadFrequently:true});
 
+// ── Launch ────────────────────────────────────────────────────────
 async function launchApp(){
-  const startup=document.getElementById('startup');
-  try{stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:'environment',width:{ideal:1280},height:{ideal:720}}});}
-  catch(e){try{stream=await navigator.mediaDevices.getUserMedia({video:true});}catch(e2){alert('Camera permission denied.');return;}}
-  video.srcObject=stream;
-  await new Promise(r=>video.onloadedmetadata=r);
-  startup.style.animation='fadeOut 0.5s ease forwards';
-  setTimeout(()=>startup.style.display='none',500);
+  const startup = document.getElementById('startup');
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({
+      video:{facingMode:'environment',width:{ideal:1280},height:{ideal:720}}});
+  } catch(e) {
+    try { stream = await navigator.mediaDevices.getUserMedia({video:true}); }
+    catch(e2) { alert('Camera permission denied.'); return; }
+  }
+  video.srcObject = stream;
+  await new Promise(r => video.onloadedmetadata = r);
+  startup.style.animation = 'fadeOut 0.5s ease forwards';
+  setTimeout(() => startup.style.display='none', 500);
   resizeCanvases();
+  setMode('tol'); // ensure default mode is visually active
 }
-function resizeCanvases(){canvasM.width=window.innerWidth;canvasM.height=window.innerHeight;canvasP.width=PW;canvasP.height=PH;}
-window.addEventListener('resize',resizeCanvases);
 
+function resizeCanvases(){
+  canvasM.width = window.innerWidth;
+  canvasM.height = window.innerHeight;
+  canvasP.width = PW; canvasP.height = PH;
+  // Update corner positions
+  const panel = document.getElementById('bottom-panel');
+  const ph = panel ? panel.offsetHeight : 220;
+  ['bl','br'].forEach(cls => {
+    const el = document.querySelector('.corner.'+cls);
+    if(el) el.style.bottom = ph+'px';
+  });
+}
+window.addEventListener('resize', resizeCanvases);
+
+// ── Controls ──────────────────────────────────────────────────────
 function toggleDetection(){
-  detecting=!detecting;
-  const btn=document.getElementById('start-btn');
-  if(detecting){btn.textContent='STOP DETECTION';btn.classList.add('running');document.getElementById('live-dot').style.background='var(--danger)';requestAnimationFrame(processFrame);}
-  else{btn.textContent='START DETECTION';btn.classList.remove('running');document.getElementById('live-dot').style.background='var(--clear)';if(animFrame)cancelAnimationFrame(animFrame);ctx.clearRect(0,0,canvasM.width,canvasM.height);setThreat('CLEAR',[]);}
+  detecting = !detecting;
+  const btn = document.getElementById('start-btn');
+  if(detecting){
+    btn.textContent='STOP DETECTION'; btn.classList.add('running');
+    document.getElementById('live-dot').style.background='var(--danger)';
+    cableHistory=[];
+    requestAnimationFrame(processFrame);
+  } else {
+    btn.textContent='START DETECTION'; btn.classList.remove('running');
+    document.getElementById('live-dot').style.background='var(--clear)';
+    if(animFrame) cancelAnimationFrame(animFrame);
+    ctx.clearRect(0,0,canvasM.width,canvasM.height);
+    updateDisplay('CLEAR',[]);
+  }
 }
 
-document.getElementById('sens-slider').addEventListener('input',function(){document.getElementById('sens-val').textContent=this.value;});
-document.getElementById('sky-slider').addEventListener('input',function(){document.getElementById('sky-val').textContent=this.value;});
+function setMode(mode){
+  flightMode = mode;
+  ['tol','cruise','night'].forEach(m => {
+    document.getElementById('mode-'+m)?.classList.toggle('active', m===mode);
+  });
+  const presets = {
+    tol:   {sens:8, sky:2},
+    cruise:{sens:7, sky:6},
+    night: {sens:10,sky:1}
+  };
+  const p = presets[mode];
+  if(p){
+    document.getElementById('sens-slider').value = p.sens;
+    document.getElementById('sens-val').textContent = p.sens;
+    document.getElementById('sky-slider').value = p.sky;
+    document.getElementById('sky-val').textContent = p.sky;
+  }
+}
 
 function applyPreset(name){
-  const p={day:{sens:7,sky:6},haze:{sens:8,sky:3},dusk:{sens:9,sky:2},reset:{sens:7,sky:6}}[name];
-  if(!p)return;
-  document.getElementById('sens-slider').value=p.sens;document.getElementById('sens-val').textContent=p.sens;
-  document.getElementById('sky-slider').value=p.sky;document.getElementById('sky-val').textContent=p.sky;
-  document.querySelectorAll('[onclick^="applyPreset"]').forEach(b=>{
-    if(b.getAttribute('onclick')===`applyPreset('${name}')`){
-      b.style.color='var(--scan)';b.style.borderColor='var(--scan)';b.style.background='rgba(0,255,160,0.12)';
-      setTimeout(()=>{b.style.color='';b.style.borderColor='';b.style.background='';},900);
-    }
-  });
+  const presets = {
+    day:  {sens:7, sky:6},
+    haze: {sens:8, sky:3},
+    dusk: {sens:9, sky:2},
+    reset:{sens:8, sky:2}
+  };
+  const p = presets[name]; if(!p) return;
+  document.getElementById('sens-slider').value = p.sens;
+  document.getElementById('sens-val').textContent = p.sens;
+  document.getElementById('sky-slider').value = p.sky;
+  document.getElementById('sky-val').textContent = p.sky;
 }
 
-// ─── Temporal Smoothing ──────────────────────────────────────────
-// Wires detected on frame N are held for HOLD_FRAMES additional frames.
-// This prevents the alert from flickering off when a single frame misses
-// the wire due to motion blur, exposure change, or processing variance.
-function temporalSmooth(newCables){
-  // Add current frame to history
-  cableHistory.push({cables:newCables,age:0});
-  // Age all entries, remove old ones
-  cableHistory=cableHistory.filter(h=>{h.age++;return h.age<=HOLD_FRAMES;});
-  // Return the union of all cables within hold window, deduped
-  const all=[];
-  for(const h of cableHistory){
-    for(const c of h.cables){
-      // Only add if no similar cable already in 'all'
-      const dup=all.find(a=>Math.abs((a.y1+a.y2)/2-(c.y1+c.y2)/2)<12&&
-                             Math.abs(a.x1-c.x1)<PW*0.2);
-      if(!dup)all.push(c);
-    }
-  }
-  // Cap at 6
-  all.sort((a,b)=>(b._proxScore||0)-(a._proxScore||0));
-  return all.slice(0,6);
-}
+document.getElementById('sens-slider').addEventListener('input',function(){
+  document.getElementById('sens-val').textContent=this.value;});
+document.getElementById('sky-slider').addEventListener('input',function(){
+  document.getElementById('sky-val').textContent=this.value;});
 
-// ─── Flight Mode ─────────────────────────────────────────────────
-// CRUISE  — sky zone active. Best for en-route flight with clear sky.
-//           Rejects ground/building false positives.
-// T/O·LDG — sky zone disabled, full-frame scan. For takeoff and landing
-//           where wires appear against buildings and complex backgrounds.
-//           Higher false positive risk — pilot awareness required.
-// NIGHT   — full-frame, maximum sensitivity, lower contrast threshold.
-//           For reduced visibility, dusk, dawn operations.
-function setFlightMode(mode){
-  flightMode=mode;
-  const modes=['cruise','tol','night'];
-  const ids=['mode-cruise','mode-tol','mode-night'];
-  ids.forEach((id,i)=>{
-    const btn=document.getElementById(id);
-    if(!btn)return;
-    const active=modes[i]===mode;
-    btn.style.background=active?'rgba(0,255,160,0.12)':'transparent';
-    btn.style.borderColor=active?'var(--scan)':'rgba(0,255,160,0.3)';
-    btn.style.color=active?'var(--scan)':'rgba(0,255,160,0.6)';
-  });
-  // Auto-adjust sensitivity and sky threshold per mode
-  if(mode==='cruise'){
-    document.getElementById('sens-slider').value=7;
-    document.getElementById('sens-val').textContent=7;
-    document.getElementById('sky-slider').value=6;
-    document.getElementById('sky-val').textContent=6;
-  } else if(mode==='tol'){
-    document.getElementById('sens-slider').value=8;
-    document.getElementById('sens-val').textContent=8;
-    document.getElementById('sky-slider').value=2; // low — accept any sky fragment
-    document.getElementById('sky-val').textContent=2;
-  } else if(mode==='night'){
-    document.getElementById('sens-slider').value=10;
-    document.getElementById('sens-val').textContent=10;
-    document.getElementById('sky-slider').value=1;
-    document.getElementById('sky-val').textContent=1;
-  }
-}
-
-// ─── Main Loop ────────────────────────────────────────────────────
+// ── Main Loop ─────────────────────────────────────────────────────
 function processFrame(timestamp){
-  if(!detecting)return;
-  animFrame=requestAnimationFrame(processFrame);
-  const dt=timestamp-lastTime;lastTime=timestamp;
-  fpsSmooth=fpsSmooth*0.85+(dt>0?1000/dt:0)*0.15;
-  document.getElementById('m-fps').textContent=Math.round(fpsSmooth);
-  if(video.readyState<2)return;
-  ctxP.drawImage(video,0,0,PW,PH);
-  const imageData=ctxP.getImageData(0,0,PW,PH);
-  const gray=buildGray(imageData.data);
-  detectSkyZone(imageData.data);
-  const rawCables=findWires(gray,imageData.data);
-  // Temporal persistence: hold detections for 4 frames to smooth flicker
-  const cables=temporalSmooth(rawCables);
+  if(!detecting) return;
+  animFrame = requestAnimationFrame(processFrame);
+
+  const dt = timestamp - lastTime; lastTime = timestamp;
+  fpsSmooth = fpsSmooth*0.85 + (dt>0 ? 1000/dt : 0)*0.15;
+  document.getElementById('m-fps').textContent = Math.round(fpsSmooth)+'fps';
+
+  if(video.readyState < 2) return;
+
+  ctxP.drawImage(video, 0, 0, PW, PH);
+  const imgData = ctxP.getImageData(0, 0, PW, PH);
+
+  detectSkyZone(imgData.data);
+  const gray = toGray(imgData.data);
+  const rawCables = findWires(gray, imgData.data);
+  const cables = temporalSmooth(rawCables);
+
   renderOverlay(cables);
-  setThreat(scoreThreat(cables),cables);
+  const level = scoreLevel(cables);
+  updateDisplay(level, cables);
+  triggerAudio(level);
 }
 
-// ─── Gray ────────────────────────────────────────────────────────
-function buildGray(data){
-  const g=new Float32Array(PW*PH);
-  for(let i=0;i<PW*PH;i++){const p=i*4;g[i]=0.299*data[p]+0.587*data[p+1]+0.114*data[p+2];}
+// ── Grayscale ─────────────────────────────────────────────────────
+function toGray(data){
+  const g = new Float32Array(PW*PH);
+  for(let i=0;i<PW*PH;i++){
+    const p=i*4; g[i]=0.299*data[p]+0.587*data[p+1]+0.114*data[p+2];
+  }
   return g;
 }
 
-// ─── Sky Zone Detection v4.9 ─────────────────────────────────────
-// v4.9 fixes: removed highSat check (was blocking vivid blue sky),
-// increased gap tolerance to 10 (wires are 2-4 rows, need room),
-// added rowP88 brightness gate to stop zone at dark rooflines.
+// ── Sky Zone Detection ────────────────────────────────────────────
+// v5 key fixes applied correctly (all in this one function):
+// - NO highSat check (vivid blue sky has 100% saturated pixels — was blocking detection)
+// - Gap tolerance = 10 rows (wires interrupt sky for 2-4 rows)
+// - rowP88 brightness gate: stop zone when background gets dark (roofline)
 function detectSkyZone(data){
-  const skyThr=parseInt(document.getElementById('sky-slider').value);
-  const minSkyScore=0.28+(skyThr*0.04);
+  const skyThr = parseInt(document.getElementById('sky-slider').value);
+  const minScore = 0.28 + skyThr*0.04;
 
-  // Per-row 88th-percentile brightness — used to detect roofline dropoff
-  const rowP88=new Float32Array(PH);
+  // Per-row 88th-percentile brightness (background reference)
+  const rowP88 = new Float32Array(PH);
   for(let y=0;y<PH;y++){
-    const tmp=new Float32Array(PW);
+    const tmp = new Float32Array(PW);
     for(let x=0;x<PW;x++){
       const p=(y*PW+x)*4;
       tmp[x]=data[p]*0.299+data[p+1]*0.587+data[p+2]*0.114;
     }
     tmp.sort();
-    rowP88[y]=tmp[Math.floor(PW*0.88)];
+    rowP88[y] = tmp[Math.floor(PW*0.88)];
   }
 
-  const rowScore=new Float32Array(PH);
+  // Score each row — only skip mostly-black rows (status bar)
+  const rowScore = new Float32Array(PH);
   for(let y=0;y<PH;y++){
-    let darkCount=0,sumR=0,sumG=0,sumB=0;
+    let dark=0, sumR=0, sumG=0, sumB=0;
     for(let x=0;x<PW;x++){
-      const p=(y*PW+x)*4,r=data[p],g=data[p+1],b=data[p+2];
-      sumR+=r;sumG+=g;sumB+=b;
-      if((r+g+b)<75)darkCount++;
+      const p=(y*PW+x)*4, r=data[p], g=data[p+1], b=data[p+2];
+      sumR+=r; sumG+=g; sumB+=b;
+      if(r+g+b<75) dark++;
     }
-    // Only skip rows that are mostly black (status bar)
-    if(darkCount/PW>0.45){rowScore[y]=0;continue;}
-    const aR=sumR/PW,aG=sumG/PW,aB=sumB/PW,aBr=(aR+aG+aB)/3;
-    const isBlue=aB>aR*0.90&&aB>aG*0.88&&aBr>80;
-    const isWhite=aBr>175&&Math.max(aR,aG,aB)-Math.min(aR,aG,aB)<40;
-    const isDusk=aBr>140&&aR<250&&aR<aG*1.35&&aB>60;
-    const isGrey=Math.max(aR,aG,aB)-Math.min(aR,aG,aB)<25&&aBr<180;
-    rowScore[y]=(isGrey)?0:(isBlue||isWhite||isDusk)?1.0:0;
+    if(dark/PW > 0.45){ rowScore[y]=0; continue; }
+    const aR=sumR/PW, aG=sumG/PW, aB=sumB/PW, br=(aR+aG+aB)/3;
+    const isBlue  = aB>aR*0.90 && aB>aG*0.88 && br>80;
+    const isWhite = br>175 && Math.max(aR,aG,aB)-Math.min(aR,aG,aB)<40;
+    const isDusk  = br>140 && aR<250 && aR<aG*1.35 && aB>60;
+    const isGrey  = Math.max(aR,aG,aB)-Math.min(aR,aG,aB)<25 && br<180;
+    rowScore[y] = isGrey ? 0 : (isBlue||isWhite||isDusk) ? 1.0 : 0;
   }
 
-  // Find sky band — allow gap of 10 rows (wires are 2-4 rows thick)
-  // Stop when background brightness drops (roofline/ground)
-  let top=-1,bot=0,gap=0;
+  // Find sky band with wire-aware gap tolerance
+  let top=-1, bot=0, gap=0;
   for(let y=0;y<PH;y++){
-    if(top>=0&&rowP88[y]<75&&gap>2)break; // dark background = end of sky
-    if(rowScore[y]>=minSkyScore){
-      if(top<0)top=y;
-      bot=y;gap=0;
-    }else if(top>=0){
+    if(top>=0 && rowP88[y]<75 && gap>2) break; // dark background = roofline
+    if(rowScore[y]>=minScore){
+      if(top<0) top=y;
+      bot=y; gap=0;
+    } else if(top>=0){
       gap++;
-      if(gap>10)break;
+      if(gap>10) break; // allow 10-row gap for wire rows
     }
   }
 
-  // T/O·LDG and NIGHT: full frame scan
-  if(flightMode==='tol'||flightMode==='night'){
-    skyTop=0;skyBot=PH-1;skyValid=true;
-  } else if(top<0||bot-top<6){
-    skyTop=0;skyBot=Math.floor(PH*0.45);skyValid=false;
+  // T/O·LDG and NIGHT: full frame
+  if(flightMode==='tol' || flightMode==='night'){
+    skyTop=0; skyBot=PH-1; skyValid=true;
+  } else if(top<0 || bot-top<6){
+    skyTop=0; skyBot=Math.floor(PH*0.45); skyValid=false;
   } else {
     skyTop=Math.max(0,top);
     skyBot=Math.min(PH-1,bot+6);
     skyValid=true;
   }
 
-  const pct=Math.round(((skyBot-skyTop)/PH)*100);
-  const el=document.getElementById('m-sky');
-  if(el){el.textContent=pct+'%';el.className='value '+(skyValid?pct>20?'green':'amber':'red');}
-  const scY=canvasM.height/PH;
-  const bar=document.getElementById('sky-bar');
-  const lbl=document.getElementById('sky-label');
-  if(bar){bar.style.top=(skyTop*scY+56)+'px';bar.style.height=((skyBot-skyTop)*scY)+'px';}
-  if(lbl)lbl.style.top=((skyTop*scY)+62)+'px';
+  const pct = Math.round(((skyBot-skyTop)/PH)*100);
+  const skyEl = document.getElementById('m-sky');
+  if(skyEl){ skyEl.textContent=pct+'%'; skyEl.className='val '+(skyValid&&pct>20?'green':pct>6?'amber':'red'); }
+
+  const scY = canvasM.height/PH;
+  const bar = document.getElementById('sky-bar');
+  const lbl = document.getElementById('sky-label');
+  if(bar){ bar.style.top=(skyTop*scY+56)+'px'; bar.style.height=((skyBot-skyTop)*scY)+'px'; }
+  if(lbl) lbl.style.top=((skyTop*scY)+60)+'px';
 }
 
-// ─── Wire Detection — Local Contrast ─────────────────────────────
-// Core algorithm proven across ALL test images.
-// Scans every pixel in sky zone. A wire pixel is darker than its
-// immediate horizontal neighbours by at least `contrastThr`.
-// This handles: horizontal wires, diagonal wires, dusk low contrast.
-function findWires(gray,colorData){
-  const sens=parseInt(document.getElementById('sens-slider').value);
-  // Contrast gap: sens=7->8, sens=9->6, sens=10->5
-  // Night mode: lower contrast threshold to catch faint wires in low light
-  const contrastThr=flightMode==='night'?Math.max(3,10-sens):Math.max(4,13-sens);
-  const WIN=7; // half-window px each side for background sample
-  const minSpan=PW*0.15; // minimum wire span: 15% of frame = ~48px
+// ── Wire Detection ────────────────────────────────────────────────
+// Local contrast: pixel darker than 7px neighbours = wire candidate
+// Proven across horizontal, diagonal, dusk, bright day, cloudy conditions
+function findWires(gray, colorData){
+  const sens   = parseInt(document.getElementById('sens-slider').value);
+  const cThr   = Math.max(4, 13-sens);   // contrast threshold
+  const minSpan = PW*0.15;               // minimum wire span px
 
-  // Build wire pixel map within sky zone
-  const wireMap=new Uint8Array(PW*PH);
-  const contrastMap=new Float32Array(PW*PH);
+  const wireMap     = new Uint8Array(PW*PH);
+  const contrastMap = new Float32Array(PW*PH);
 
-  for(let y=skyTop;y<=skyBot;y++){
-    // ── Row qualification gate ──────────────────────────────────
-    // Use 88th-percentile brightness as background sky reference.
-    // Wires appear as dark pixels against a BRIGHT background.
-    // If the background itself is dark, we're looking at vegetation/ground
-    // not sky — wires won't be visible there anyway.
-    // p88 > 100 means the background is bright enough to contain wires.
-    // This rejects dark vegetation rows, shadow rows, and ground rows.
-    const rowPx=new Float32Array(PW);
-    let rowBright=0;
-    for(let x=0;x<PW;x++){rowPx[x]=gray[y*PW+x];rowBright+=rowPx[x];}
-    rowBright/=PW;
-    if(rowBright<40)continue; // skip very dark rows (status bar etc)
-    // Sort to get 88th percentile (background sky brightness)
-    const sorted=rowPx.slice().sort();
-    const p88=sorted[Math.floor(PW*0.88)];
-    // Require bright background — wires are dark against bright sky/background
-    // p88 < 100 means the row background is too dark to contain visible wires
-    if(p88<100)continue;
-    // Skip iPhone status bar rows (top 28px and bottom 10px of processing frame)
-    // These produce consistent false positives from UI chrome edges
-    if(y<28||y>PH-10)continue;
+  for(let y=skyTop; y<=skyBot; y++){
+    if(y<28 || y>PH-10) continue; // skip status bar rows
 
-    for(let x=WIN;x<PW-WIN;x++){
-      // Local background: mean of WIN pixels each side
+    // Row 88th-percentile brightness gate
+    const rowPx = new Float32Array(PW);
+    for(let x=0;x<PW;x++) rowPx[x]=gray[y*PW+x];
+    const sortedPx = rowPx.slice().sort();
+    const p88 = sortedPx[Math.floor(PW*0.88)];
+    if(p88 < 100) continue; // background too dark
+
+    for(let x=7; x<PW-7; x++){
       let bg=0;
-      for(let d=1;d<=WIN;d++)bg+=gray[y*PW+(x-d)]+gray[y*PW+(x+d)];
-      bg/=(WIN*2);
-      const c=bg-gray[y*PW+x]; // positive = pixel darker than background
-      if(c>contrastThr){
-        wireMap[y*PW+x]=255;
-        contrastMap[y*PW+x]=c;
-      }
+      for(let d=1;d<=7;d++) bg+=gray[y*PW+(x-d)]+gray[y*PW+(x+d)];
+      bg/=14;
+      const c = bg - gray[y*PW+x];
+      if(c > cThr){ wireMap[y*PW+x]=255; contrastMap[y*PW+x]=c; }
     }
   }
 
-  // Find horizontal runs of wire pixels per row
-  const rowRuns=[];
-  for(let y=skyTop;y<=skyBot;y++){
-    let start=-1,maxC=0,n=0,sumC=0,gaps=0,lastX=-1;
+  // Find row runs
+  const rowRuns = [];
+  for(let y=skyTop; y<=skyBot; y++){
+    if(y<28||y>PH-10) continue;
+    let start=-1, maxC=0, sumC=0, n=0, gaps=0, lastX=-1;
     for(let x=0;x<PW;x++){
       if(wireMap[y*PW+x]){
-        if(start<0)start=x;
-        else if(x>lastX+1)gaps++;
+        if(start<0) start=x;
+        else if(x>lastX+2) gaps++;
         maxC=Math.max(maxC,contrastMap[y*PW+x]);
-        sumC+=contrastMap[y*PW+x];n++;lastX=x;
-      }else if(start>=0){
+        sumC+=contrastMap[y*PW+x]; n++; lastX=x;
+      } else if(start>=0){
         const span=x-start;
-        if(span>=6)rowRuns.push({y,x1:start,x2:x-1,span,maxC,avgC:n>0?sumC/n:0,gaps});
-        start=-1;maxC=0;n=0;sumC=0;gaps=0;lastX=-1;
+        if(span>=6) rowRuns.push({y,x1:start,x2:x-1,span,maxC,avgC:n>0?sumC/n:0,gaps});
+        start=-1; maxC=0; sumC=0; n=0; gaps=0; lastX=-1;
       }
     }
-    if(start>=0&&PW-start>=6)rowRuns.push({y,x1:start,x2:PW-1,span:PW-start,maxC,avgC:n>0?sumC/n:0,gaps});
+    if(start>=0 && PW-start>=6)
+      rowRuns.push({y,x1:start,x2:PW-1,span:PW-start,maxC,avgC:n>0?sumC/n:0,gaps});
   }
 
-  if(!rowRuns.length)return[];
-
-  // Cluster adjacent runs into cable objects
+  // Cluster adjacent rows into cable objects
   rowRuns.sort((a,b)=>a.y-b.y);
-  const clusters=[];
+  const clusters = [];
   for(const run of rowRuns){
-    const match=clusters.find(cl=>{
-      const last=cl[cl.length-1];
-      if(run.y-last.y>5)return false;
-      return run.x1<=last.x2+12&&run.x2>=last.x1-12;
+    const match = clusters.find(cl=>{
+      const last = cl[cl.length-1];
+      if(run.y-last.y>5) return false;
+      return run.x1<=last.x2+PW*0.18 && run.x2>=last.x1-PW*0.18;
     });
-    if(match)match.push(run);
+    if(match) match.push(run);
     else clusters.push([run]);
   }
 
-  // Build cables — require minimum span AND linearity
-  const cables=[];
+  // Build cable objects — no thickness filter (clouds inflate row counts)
+  const cables = [];
   for(const cl of clusters){
-    const x1=Math.min(...cl.map(r=>r.x1));
-    const x2=Math.max(...cl.map(r=>r.x2));
-    if(x2-x1<minSpan)continue;
+    const x1 = Math.min(...cl.map(r=>r.x1));
+    const x2 = Math.max(...cl.map(r=>r.x2));
+    if(x2-x1 < minSpan) continue;
 
-    // LINEARITY CHECK: count total dark pixels vs span
-    // Real wire: dense, continuous (density > 0.35, gaps < 6)
-    // Vegetation/noise: sparse, patchy (density < 0.2, many gaps)
-    const totalPts=cl.reduce((s,r)=>s+r.span,0);
-    const spanTotal=x2-x1;
-    const density=totalPts/(spanTotal*Math.max(1,cl.length));
-    // Count gaps within runs
-    const avgGaps=cl.reduce((s,r)=>s+(r.gaps||0),0)/cl.length;
-    // T/O·LDG mode: stricter linearity needed (no sky zone guard)
-    // Require higher density to reject car/building edges
-    const minDensity=( flightMode==='tol'||flightMode==='night')?0.28:0.18;
-    const maxGapsTol=(flightMode==='tol'||flightMode==='night')?6:8;
-    if(density<minDensity&&avgGaps>maxGapsTol)continue;
-    const yMid=Math.round(cl.reduce((s,r)=>s+r.y,0)/cl.length);
-    const maxC=Math.max(...cl.map(r=>r.maxC));
-    const avgC=cl.reduce((s,r)=>s+r.avgC,0)/cl.length;
-    // Correct y endpoints for diagonal wires
-    const leftCl=cl.filter(r=>r.x1<=x1+PW*0.2);
-    const rightCl=cl.filter(r=>r.x2>=x2-PW*0.2);
-    const y1=leftCl.length?Math.round(leftCl.reduce((s,r)=>s+r.y,0)/leftCl.length):yMid;
-    const y2=rightCl.length?Math.round(rightCl.reduce((s,r)=>s+r.y,0)/rightCl.length):yMid;
-    // THICKNESS FILTER: real wires are 1-6 rows thick at 320px scale.
-    // Vegetation/building bands span 10+ rows.
-    // Increased from 8 to 12 to reduce missed detections on marginal frames.
-    const yThickness=cl[cl.length-1].y-cl[0].y;
-    if(yThickness>12)continue;
-    cables.push({x1,y1,x2,y2,_span:x2-x1,_contrast:avgC,_maxC:maxC,_rows:cl.length,_thickness:yThickness});
+    const avgC = cl.reduce((s,r)=>s+r.avgC,0)/cl.length;
+    const maxC = Math.max(...cl.map(r=>r.maxC));
+
+    // ── Wire endpoints for line drawing ───────────────────────────
+    // Find the y-position at the left and right ends of the wire
+    // This correctly captures diagonal wires (not just horizontal midpoint)
+    const leftRuns  = cl.filter(r=>r.x1<=x1+PW*0.15);
+    const rightRuns = cl.filter(r=>r.x2>=x2-PW*0.15);
+    const y1 = leftRuns.length  ? Math.round(leftRuns.reduce((s,r)=>s+r.y,0)/leftRuns.length)
+                                 : Math.round(cl.reduce((s,r)=>s+r.y,0)/cl.length);
+    const y2 = rightRuns.length ? Math.round(rightRuns.reduce((s,r)=>s+r.y,0)/rightRuns.length)
+                                : Math.round(cl.reduce((s,r)=>s+r.y,0)/cl.length);
+
+    cables.push({x1,y1,x2,y2, _span:x2-x1, _contrast:avgC, _maxC:maxC, _rows:cl.length});
   }
 
   cables.sort((a,b)=>b._span-a._span);
-  const top6=cables.slice(0,6);
-  top6.forEach(c=>scoreProximity(c));
+  const top6 = cables.slice(0,6);
+  top6.forEach(c => scoreProximity(c));
   return top6;
 }
 
-// ─── Proximity / Time-to-Impact Scoring at 160kt ─────────────────
-function scoreProximity(c){
-  const sr=Math.max(1,skyBot-skyTop);
-  const cY=(c.y1+c.y2)/2;
-  const vertScore=cY<=skyTop?0.05:cY>=skyBot?1.0:(cY-skyTop)/sr;
-  const contrastScore=Math.min(1,Math.max(0,(c._contrast||0)/40));
-  const spanScore=Math.min(1,(c._span||0)/(PW*0.75));
-  const score=vertScore*0.55+contrastScore*0.25+spanScore*0.20;
-  c._proxScore=score;
-  if(score>=0.85){c._zone='IMMINENT';c._tti='<1s';c._color='#ff0000';}
-  else if(score>=0.70){c._zone='CRITICAL';c._tti='1-3s';c._color='#ff2d2d';}
-  else if(score>=0.50){c._zone='WARNING';c._tti='3-8s';c._color='#ff6b00';}
-  else if(score>=0.28){c._zone='CAUTION';c._tti='8-15s';c._color='#ff9500';}
-  else{c._zone='ADVISORY';c._tti='>15s';c._color='#ffd60a';}
+// ── Temporal Smoothing ────────────────────────────────────────────
+// Hold detections for HOLD_FRAMES — prevents single-frame misses
+function temporalSmooth(newCables){
+  cableHistory.push({cables:newCables, age:0});
+  cableHistory = cableHistory.filter(h=>{ h.age++; return h.age<=HOLD_FRAMES; });
+  const all = [];
+  for(const h of cableHistory){
+    for(const c of h.cables){
+      const dup = all.find(a=>
+        Math.abs((a.y1+a.y2)/2-(c.y1+c.y2)/2)<12 &&
+        Math.abs(a.x1-c.x1)<PW*0.2);
+      if(!dup) all.push(c);
+    }
+  }
+  all.sort((a,b)=>(b._proxScore||0)-(a._proxScore||0));
+  return all.slice(0,6);
 }
 
-// ─── Render ───────────────────────────────────────────────────────
+// ── Proximity Scoring at 160kt ────────────────────────────────────
+function scoreProximity(c){
+  const sr = Math.max(1, skyBot-skyTop);
+  const cY = (c.y1+c.y2)/2;
+  const v  = cY<=skyTop?0.05 : cY>=skyBot?1.0 : (cY-skyTop)/sr;
+  const cs = Math.min(1, Math.max(0,(c._contrast||0)/40));
+  const ls = Math.min(1, (c._span||0)/(PW*0.75));
+  const score = v*0.55 + cs*0.25 + ls*0.20;
+  c._proxScore = score;
+
+  if(score>=0.85){ c._zone='IMMINENT'; c._tti='<1s';    c._color='#ff0000'; }
+  else if(score>=0.70){ c._zone='CRITICAL'; c._tti='1-3s';  c._color='#ff2d2d'; }
+  else if(score>=0.50){ c._zone='WARNING';  c._tti='3-8s';  c._color='#ff6b00'; }
+  else if(score>=0.28){ c._zone='CAUTION';  c._tti='8-15s'; c._color='#ff9500'; }
+  else               { c._zone='ADVISORY'; c._tti='>15s';  c._color='#ffd60a'; }
+}
+
+// ── Render Overlay ────────────────────────────────────────────────
+// v5 KEY FIX: draws actual coloured lines on the wire positions
+// using correct diagonal endpoints (x1,y1)→(x2,y2)
 function renderOverlay(cables){
-  const W=canvasM.width,H=canvasM.height,sx=W/PW,sy=H/PH;
+  const W=canvasM.width, H=canvasM.height;
+  const sx=W/PW, sy=H/PH;
   ctx.clearRect(0,0,W,H);
-  flashPhase=(flashPhase+0.18)%(Math.PI*2);
-  const sorted=[...cables].sort((a,b)=>(a._proxScore||0)-(b._proxScore||0));
+  flashPhase = (flashPhase+0.2)%(Math.PI*2);
+
+  const sorted = [...cables].sort((a,b)=>(a._proxScore||0)-(b._proxScore||0));
+
   for(const c of sorted){
-    const color=c._color||'#ffd60a';
-    const zone=c._zone||'ADVISORY';
-    const thick=zone==='IMMINENT'?5:zone==='CRITICAL'?4:zone==='WARNING'?3:2;
-    const alpha=zone==='IMMINENT'?0.5+0.5*Math.sin(flashPhase*5):1.0;
+    const color = c._color || '#ffd60a';
+    const zone  = c._zone  || 'ADVISORY';
+    const thick = zone==='IMMINENT'?5 : zone==='CRITICAL'?4 : zone==='WARNING'?3 : 2;
+    const alpha = zone==='IMMINENT' ? 0.5+0.5*Math.sin(flashPhase*5) : 1.0;
+
+    // ── Draw the wire line ────────────────────────────────────────
+    // Uses actual diagonal endpoints so line sits ON the wire
     ctx.save();
-    ctx.globalAlpha=alpha;
-    ctx.strokeStyle=color;ctx.lineWidth=thick;
-    ctx.shadowColor=color;ctx.shadowBlur=14;ctx.lineCap='round';
-    ctx.beginPath();ctx.moveTo(c.x1*sx,c.y1*sy);ctx.lineTo(c.x2*sx,c.y2*sy);
+    ctx.globalAlpha = alpha;
+    ctx.strokeStyle = color;
+    ctx.lineWidth = thick;
+    ctx.shadowColor = color;
+    ctx.shadowBlur = zone==='IMMINENT'?20:12;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(c.x1*sx, c.y1*sy);
+    ctx.lineTo(c.x2*sx, c.y2*sy);
     ctx.stroke();
     ctx.restore();
-    ctx.globalAlpha=alpha;
-    ctx.fillStyle=color;
-    ctx.beginPath();ctx.arc(c.x1*sx,c.y1*sy,thick+2,0,Math.PI*2);ctx.fill();
-    ctx.beginPath();ctx.arc(c.x2*sx,c.y2*sy,thick+2,0,Math.PI*2);ctx.fill();
-    ctx.globalAlpha=1;
-    const lx=((c.x1+c.x2)/2)*sx;
-    const ly=Math.min(c.y1,c.y2)*sy-10;
-    const label=zone+' '+c._tti;
-    ctx.font='bold 10px "Share Tech Mono",monospace';
-    const tw=ctx.measureText(label).width;
-    ctx.fillStyle='rgba(0,0,0,0.65)';ctx.fillRect(lx-tw/2-3,ly-13,tw+6,16);
-    ctx.fillStyle=color;ctx.fillText(label,lx-tw/2,ly);
+
+    // Endpoint dots
+    ctx.globalAlpha = alpha;
+    ctx.fillStyle = color;
+    const dotR = thick+2;
+    ctx.beginPath(); ctx.arc(c.x1*sx, c.y1*sy, dotR, 0, Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc(c.x2*sx, c.y2*sy, dotR, 0, Math.PI*2); ctx.fill();
+    ctx.globalAlpha = 1;
+
+    // Zone + TTI label with dark background
+    const lx = ((c.x1+c.x2)/2)*sx;
+    const ly = Math.min(c.y1,c.y2)*sy - 12;
+    const label = zone+' '+c._tti;
+    ctx.font = 'bold 10px "Share Tech Mono",monospace';
+    const tw = ctx.measureText(label).width;
+    ctx.fillStyle = 'rgba(0,0,0,0.7)';
+    ctx.fillRect(lx-tw/2-3, ly-13, tw+6, 16);
+    ctx.fillStyle = color;
+    ctx.fillText(label, lx-tw/2, ly);
   }
+
+  // Cable count
   if(cables.length>0){
-    ctx.font='500 11px "Share Tech Mono",monospace';
-    ctx.fillStyle='rgba(0,255,160,0.65)';
-    ctx.fillText(cables.length+' CABLE'+(cables.length>1?'S':'')+' DETECTED',16,H-240);
+    ctx.font = '500 11px "Share Tech Mono",monospace';
+    ctx.fillStyle = 'rgba(0,255,159,0.6)';
+    ctx.fillText(cables.length+' CABLE'+(cables.length>1?'S':'')+' DETECTED',
+      14, H-200);
   }
 }
 
-// ─── Threat Scoring ───────────────────────────────────────────────
-function scoreThreat(cables){
-  if(!cables.length)return'CLEAR';
-  const rank={ADVISORY:1,CAUTION:2,WARNING:3,CRITICAL:4,IMMINENT:5};
-  return cables.reduce((b,c)=>(rank[c._zone]||1)>(rank[b._zone]||1)?c:b,cables[0])._zone||'ADVISORY';
-}
-function setThreat(level,cables){
-  const worst=cables.length?cables.reduce((b,c)=>(c._proxScore||0)>(b._proxScore||0)?c:b,cables[0]):null;
-  document.getElementById('m-cables').textContent=cables.length;
-  const ttiEl=document.getElementById('m-tti');
-  if(ttiEl){ttiEl.textContent=worst?worst._tti:'--';ttiEl.className='value '+(level==='IMMINENT'||level==='CRITICAL'?'red':level==='WARNING'||level==='CAUTION'?'amber':'green');}
-  const short={CLEAR:'CLEAR',ADVISORY:'ADVSY',CAUTION:'CAUTN',WARNING:'WARN',CRITICAL:'CRIT',IMMINENT:'IMMIN'};
-  document.getElementById('m-threat').textContent=short[level]||level;
-  document.getElementById('m-threat').className='value '+(level==='IMMINENT'||level==='CRITICAL'?'red':level==='WARNING'||level==='CAUTION'?'amber':'green');
-  const statusEl=document.getElementById('status-text');
-  const bannerEl=document.getElementById('alert-banner');
-  const ring=document.getElementById('threat-ring');
-  statusEl.className='';ring.classList.remove('visible');bannerEl.classList.remove('visible');
-  if(level==='IMMINENT'){statusEl.className='danger';statusEl.textContent='IMMINENT';bannerEl.classList.add('visible');document.getElementById('alert-text').textContent='⚠ PULL UP — CABLE AT IMPACT RANGE';ring.classList.add('visible');ring.style.cssText+=';width:90px;height:90px;left:'+(canvasM.width/2)+'px;top:'+(canvasM.height/2)+'px';}
-  else if(level==='CRITICAL'){statusEl.className='danger';statusEl.textContent='CRITICAL';bannerEl.classList.add('visible');document.getElementById('alert-text').textContent='⚠ CABLE — EVASIVE ACTION NOW';ring.classList.add('visible');ring.style.cssText+=';width:90px;height:90px;left:'+(canvasM.width/2)+'px;top:'+(canvasM.height/2)+'px';}
-  else if(level==='WARNING'){statusEl.className='danger';statusEl.textContent='WARNING';bannerEl.classList.add('visible');document.getElementById('alert-text').textContent='⚠ CABLE AHEAD — BEGIN AVOIDANCE';}
-  else if(level==='CAUTION'){statusEl.className='warn';statusEl.textContent='CAUTION';}
-  else if(level==='ADVISORY'){statusEl.className='warn';statusEl.textContent='ADVISORY';}
-  else{statusEl.className='clear';statusEl.textContent='CLEAR';}
-  // Audio alert
-  triggerAudio(level);
+// ── Threat Level ──────────────────────────────────────────────────
+function scoreLevel(cables){
+  if(!cables.length) return 'CLEAR';
+  const rank = {ADVISORY:1,CAUTION:2,WARNING:3,CRITICAL:4,IMMINENT:5};
+  return cables.reduce((b,c)=>(rank[c._zone]||1)>(rank[b._zone]||1)?c:b, cables[0])._zone||'ADVISORY';
 }
 
-// ─── Audio Alert System ───────────────────────────────────────────
-// Uses Web Speech API (speechSynthesis) — no external files needed.
-// Speaks aviation-style callouts at appropriate threat levels.
-// Rate-limited to prevent continuous shouting.
-let lastSpokenLevel='CLEAR';
-let lastSpeakTime=0;
-let speaking=false;
+// ── Display Update ────────────────────────────────────────────────
+function updateDisplay(level, cables){
+  const worst = cables.length
+    ? cables.reduce((b,c)=>(c._proxScore||0)>(b._proxScore||0)?c:b, cables[0])
+    : null;
 
-const AUDIO_COOLDOWN={
-  IMMINENT:1200, // repeat every 1.2s
-  CRITICAL:2500, // repeat every 2.5s
-  WARNING:5000,  // repeat every 5s
-  CAUTION:10000, // once per 10s
-  ADVISORY:20000,
-  CLEAR:0
-};
-const AUDIO_TEXT={
-  IMMINENT:'Pull up, pull up, cable',
-  CRITICAL:'Cable, evasive action',
-  WARNING:'Cable ahead, avoid',
-  CAUTION:'Cable caution',
-  ADVISORY:'Cable advisory',
-  CLEAR:null
-};
+  document.getElementById('m-cables').textContent = cables.length;
+  const ttiEl = document.getElementById('m-tti');
+  ttiEl.textContent = worst?worst._tti:'--';
+  ttiEl.className = 'val '+(level==='IMMINENT'||level==='CRITICAL'?'red':
+    level==='WARNING'||level==='CAUTION'?'amber':'green');
+
+  const short = {CLEAR:'CLEAR',ADVISORY:'ADVSY',CAUTION:'CAUTN',
+                 WARNING:'WARN',CRITICAL:'CRIT',IMMINENT:'IMMIN'};
+  const thrEl = document.getElementById('m-threat');
+  thrEl.textContent = short[level]||level;
+  thrEl.className = 'val '+(level==='IMMINENT'||level==='CRITICAL'?'red':
+    level==='WARNING'||level==='CAUTION'?'amber':'green');
+
+  const badge   = document.getElementById('status-badge');
+  const banner  = document.getElementById('alert-banner');
+  const ring    = document.getElementById('threat-ring');
+  badge.className=''; ring.classList.remove('pulse'); banner.classList.remove('show');
+
+  if(level==='IMMINENT'||level==='CRITICAL'){
+    badge.className='danger'; badge.textContent=level;
+    banner.classList.add('show');
+    document.getElementById('alert-text').textContent =
+      level==='IMMINENT'?'⚠ PULL UP — CABLE AT IMPACT RANGE':'⚠ CABLE — EVASIVE ACTION NOW';
+    ring.classList.add('pulse');
+    ring.style.cssText+=';width:90px;height:90px;left:'+(canvasM.width/2)+
+      'px;top:'+(canvasM.height/2)+'px';
+  } else if(level==='WARNING'){
+    badge.className='danger'; badge.textContent='WARNING';
+    banner.classList.add('show');
+    document.getElementById('alert-text').textContent='⚠ CABLE AHEAD — BEGIN AVOIDANCE';
+  } else if(level==='CAUTION'){
+    badge.className='warn'; badge.textContent='CAUTION';
+  } else if(level==='ADVISORY'){
+    badge.className='warn'; badge.textContent='ADVISORY';
+  } else {
+    badge.className='clear'; badge.textContent='CLEAR';
+  }
+}
+
+// ── Audio Alerts ──────────────────────────────────────────────────
+const AUDIO_COOLDOWN = {IMMINENT:1200,CRITICAL:2500,WARNING:5000,CAUTION:12000};
+const AUDIO_TEXT     = {IMMINENT:'Pull up, pull up, cable',
+                        CRITICAL:'Cable, evasive action',
+                        WARNING:'Cable ahead, avoid',
+                        CAUTION:'Cable caution'};
 
 function triggerAudio(level){
-  if(!detecting)return;
-  if(!AUDIO_TEXT[level])return;
-  const now=Date.now();
-  const cooldown=AUDIO_COOLDOWN[level]||10000;
-  if(now-lastSpeakTime<cooldown)return;
-  // Only speak if threat level is WARNING or above, or level changed up
+  if(!detecting) return;
+  const text = AUDIO_TEXT[level]; if(!text) return;
+  const cooldown = AUDIO_COOLDOWN[level]||10000;
+  if(Date.now()-lastSpeakTime < cooldown) return;
   const rank={CLEAR:0,ADVISORY:1,CAUTION:2,WARNING:3,CRITICAL:4,IMMINENT:5};
-  if((rank[level]||0)<2)return; // skip ADVISORY and CLEAR audio
-  speak(AUDIO_TEXT[level]);
-  lastSpeakTime=now;
-  lastSpokenLevel=level;
+  if((rank[level]||0)<2) return;
+  speak(text);
+  lastSpeakTime = Date.now();
 }
 
 function speak(text){
-  if(!window.speechSynthesis)return;
-  // Cancel any current speech for IMMINENT/CRITICAL urgency
+  if(!window.speechSynthesis) return;
   window.speechSynthesis.cancel();
-  const u=new SpeechSynthesisUtterance(text);
-  u.rate=0.95;    // slightly slower for clarity in cockpit noise
-  u.pitch=1.0;
-  u.volume=1.0;
-  // Try to get a clear male voice
-  const voices=window.speechSynthesis.getVoices();
-  const preferred=voices.find(v=>v.lang.startsWith('en')&&!v.name.includes('Female')&&!v.name.includes('Samantha'))
-    ||voices.find(v=>v.lang.startsWith('en'))
-    ||null;
-  if(preferred)u.voice=preferred;
+  const u = new SpeechSynthesisUtterance(text);
+  u.rate=0.95; u.pitch=1.0; u.volume=1.0;
+  const voices = window.speechSynthesis.getVoices();
+  const v = voices.find(v=>v.lang.startsWith('en')&&!v.name.includes('Samantha'))||
+            voices.find(v=>v.lang.startsWith('en'))||null;
+  if(v) u.voice=v;
   window.speechSynthesis.speak(u);
 }
 
-// Pre-load voices on first user interaction (iOS requirement)
+// Unlock iOS audio on first touch
 document.addEventListener('touchstart',()=>{
   if(window.speechSynthesis){
     window.speechSynthesis.getVoices();
-    // iOS needs a silent utterance to unlock audio
-    const unlock=new SpeechSynthesisUtterance('');
-    unlock.volume=0;
-    window.speechSynthesis.speak(unlock);
+    const u=new SpeechSynthesisUtterance(''); u.volume=0;
+    window.speechSynthesis.speak(u);
   }
 },{once:true});
 </script>
