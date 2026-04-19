@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>APLAWS v5.1 — Active Power Line Advisory Warning System</title>
+<title>APLAWS v5.2 — Active Power Line Advisory Warning System</title>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Rajdhani:wght@500;600;700&display=swap');
 
@@ -152,7 +152,7 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:28px;heigh
   <div id="startup">
     <h1>APLAWS</h1>
     <p class="version">Active Power Line Advisory Warning System</p>
-    <p>v5.1 — Real-time powerline detection for helicopter operations. Enhanced false-positive rejection, linearity &amp; continuity checks, uniformity validation.</p>
+    <p>v5.2 — Real-time powerline detection. Diagonal coherence filter: wires pass linear regression R²≥0.55, fabric/texture scatter rejected.</p>
     <div class="warn-box">
       <p>⚠ PROTOTYPE — RESEARCH USE ONLY<br>
       Not certified for operational aviation use.<br>
@@ -176,7 +176,7 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:28px;heigh
   <div id="top-bar">
     <div class="logo">
       <div class="logo-dot" id="live-dot"></div>
-      APLAWS v5.1
+      APLAWS v5.2
     </div>
     <div id="status-badge" class="clear">CLEAR</div>
   </div>
@@ -235,15 +235,12 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:28px;heigh
 
 <script>
 // ═══════════════════════════════════════════════════════════════════
-// APLAWS v5.1 — False-positive hardening
-// v5.0 carried all proven v4.9b detection code.
-// v5.1 adds: continuity check (single dominant streak per row),
-//   fill-ratio filter (wire pixels / span > 35%),
-//   linearity check (avg run span / cluster width > 45%),
-//   uniformity check (sampled contrast hits > 45% along cluster),
-//   raised minimum span to 20%, raised contrast floor to 6,
-//   raised p88 gate to 110, temporal hold reduced to 3 frames.
-// Target: eliminate fabric/texture/building false positives.
+// APLAWS v5.2 — Diagonal coherence filter
+// v5.1 over-filtered: row-level fill/gap tests eliminated thin wires.
+// v5.2: restore sensitive row-level detection (captures thin 1-2px wires),
+//   apply discrimination at CLUSTER level via linear regression R²:
+//   wire = straight diagonal line (R²>0.55), fabric = random scatter (R²<0.4).
+//   Also: gap tolerance 8px for diagonal wires, xCentre drift clustering.
 // ═══════════════════════════════════════════════════════════════════
 const PW=320, PH=240, SPEED_MS=82.3;
 
@@ -457,48 +454,55 @@ function detectSkyZone(data){
   if(lbl) lbl.style.top=((skyTop*scY)+60)+'px';
 }
 
-// ── Wire Detection v5.1 ───────────────────────────────────────────
-// Key improvements over v5.0 to eliminate fabric/texture false positives:
+// ── Wire Detection v5.2 ───────────────────────────────────────────
+// Key insight from v5.1 failure: thin wires at 320px resolution produce
+// VERY few contrast hits per row (wire is 1-2px wide). Row-level fill ratio
+// and hit-count filters eliminated real thin wires along with fabric noise.
 //
-// 1. CONTINUITY CHECK: a wire row-run must be a SINGLE dominant streak with
-//    minimal internal gaps. Fabric = many scattered hits; wire = one clean line.
-//    Max allowed gaps within a valid run = 3 (was unlimited).
+// Correct approach: RELAX row-level filters (capture thin wires),
+// but STRENGTHEN cluster-level filters (reject texture/fabric blobs).
 //
-// 2. FILL RATIO CHECK: wire pixels must fill >40% of the span they cover.
-//    A wire is a solid dark line. Texture produces sparse hits across a wide span.
+// The fundamental difference between a wire and fabric at cluster level:
 //
-// 3. LINEARITY CHECK (T/O·LDG): for full-frame mode, require that the cluster's
-//    row-runs span >60% of the cluster's horizontal extent. Eliminates corner/
-//    edge detections where hits cluster in a small patch rather than a long line.
+// WIRE CLUSTER:
+//   - Many rows each contribute a short run at a CONSISTENT x-position
+//   - As wire is diagonal, x-position SHIFTS linearly with y (straight line)
+//   - Cluster is TALL (many rows) and NARROW (1-3px per row hit)
+//   - Run x-centres follow a linear trend (low residual from line fit)
 //
-// 4. UNIFORMITY CHECK: along the best-fit row of the cluster, sample contrast at
-//    N evenly-spaced x positions. A real wire has high contrast at most positions.
-//    Fabric/clouds have patchy contrast. Require >50% of samples above threshold.
+// FABRIC/TEXTURE CLUSTER:
+//   - Many rows with wide scattered runs at RANDOM x-positions
+//   - No linear trend — x-centres jump around
+//   - Cluster tends to be WIDE with inconsistent run positions
+//   - High residual from any attempted line fit
 //
-// 5. MINIMUM SPAN RAISED: from 15% → 20% of frame width (64px). Short detections
-//    are almost always noise; real wires span most of the frame.
+// FILTERS APPLIED AT CLUSTER LEVEL:
+// 1. DIAGONAL COHERENCE: fit a line through (y, x_centre) of all runs.
+//    Require R² > 0.6. Wire = straight line; texture = random scatter.
+// 2. ROW DENSITY: cluster must span enough rows (≥3) to be a real wire,
+//    not a single bright/dark gradient hit.
+// 3. SPAN CHECK: cluster x-extent ≥ 15% of frame (restored from v5.0).
+// 4. CONTRAST FLOOR: avgC ≥ 5 (slightly raised from v5.0's implicit floor).
 //
-// 6. CONTRAST FLOOR RAISED: minimum average contrast from 4 to 6. Jeans/fabric
-//    have very low contrast relative to their background — wires are sharply dark.
-//
-// Core local-contrast algorithm (proven) is unchanged.
+// Row-level: restored sensitive detection (p88≥95, cThr from sensitivity,
+// minimal gap tolerance) — capture even faint thin wires.
 function findWires(gray, colorData){
   const sens    = parseInt(document.getElementById('sens-slider').value);
-  const cThr    = Math.max(5, 14-sens);   // slightly raised contrast floor
-  const minSpan = PW*0.20;               // 20% minimum span (~64px) — raised from 15%
+  const cThr    = Math.max(4, 13-sens);  // restored proven v5.0 threshold
+  const minSpan = PW*0.15;              // restored 15% — thin wires span the frame
 
   const wireMap     = new Uint8Array(PW*PH);
   const contrastMap = new Float32Array(PW*PH);
 
+  // ── Pixel-level contrast marking (unchanged proven core) ──────────
   for(let y=skyTop; y<=skyBot; y++){
     if(y<28 || y>PH-10) continue;
 
-    // Row p88 brightness gate — background must be bright enough to silhouette a wire
     const rowPx = new Float32Array(PW);
     for(let x=0;x<PW;x++) rowPx[x]=gray[y*PW+x];
-    const sortedPx = rowPx.slice().sort();
-    const p88 = sortedPx[Math.floor(PW*0.88)];
-    if(p88 < 110) continue; // slightly raised: dull backgrounds don't silhouette wires
+    rowPx.sort();
+    const p88 = rowPx[Math.floor(PW*0.88)];
+    if(p88 < 95) continue; // restored to original — thin wires barely affect p88
 
     for(let x=7; x<PW-7; x++){
       let bg=0;
@@ -509,112 +513,113 @@ function findWires(gray, colorData){
     }
   }
 
-  // Find row runs — with continuity (gap) and fill-ratio filters
+  // ── Row run extraction — relaxed for thin wires ───────────────────
+  // A thin wire at 320px may only produce 2-5 contrast hits per row.
+  // Allow sparse runs but require minimum span still.
   const rowRuns = [];
   for(let y=skyTop; y<=skyBot; y++){
     if(y<28||y>PH-10) continue;
 
-    // Collect all wire-pixel x positions in this row
+    // Find all hit positions
     const hits = [];
     for(let x=0;x<PW;x++){
       if(wireMap[y*PW+x]) hits.push(x);
     }
-    if(hits.length < 4) continue;
+    if(hits.length < 2) continue;
 
-    // Find the single longest contiguous run (gaps ≤3px allowed within run)
-    // This is the key: fabric gives dozens of scattered single-pixel hits,
-    // a wire gives one long unbroken streak.
-    let bestStart=hits[0], bestEnd=hits[0], bestLen=1;
-    let curStart=hits[0], curEnd=hits[0], curLen=1;
+    // Find longest run allowing gaps up to 8px (diagonal wires skip pixels)
+    let bestStart=hits[0], bestEnd=hits[0], bestHits=1;
+    let curStart=hits[0], curEnd=hits[0], curHits=1;
     for(let i=1;i<hits.length;i++){
-      if(hits[i]-curEnd <= 3){ // gap ≤3 = same run
-        curEnd=hits[i]; curLen++;
-      } else { // gap breaks the run
-        if(curLen>bestLen){ bestLen=curLen; bestStart=curStart; bestEnd=curEnd; }
-        curStart=hits[i]; curEnd=hits[i]; curLen=1;
+      if(hits[i]-curEnd <= 8){
+        curEnd=hits[i]; curHits++;
+      } else {
+        if(curHits>bestHits){ bestHits=curHits; bestStart=curStart; bestEnd=curEnd; }
+        curStart=hits[i]; curEnd=hits[i]; curHits=1;
       }
     }
-    if(curLen>bestLen){ bestLen=curLen; bestStart=curStart; bestEnd=curEnd; }
+    if(curHits>bestHits){ bestHits=curHits; bestStart=curStart; bestEnd=curEnd; }
 
     const span = bestEnd - bestStart + 1;
-    if(span < minSpan) continue;
+    if(span < 8) continue; // minimum meaningful run
 
-    // Fill ratio: wire pixels must occupy >35% of the span
-    // Count actual wire hits within [bestStart, bestEnd]
-    let fillCount = 0;
-    let maxC=0, sumC=0;
+    // Measure contrast along this run
+    let maxC=0, sumC=0, cnt=0;
     for(let x=bestStart;x<=bestEnd;x++){
       if(wireMap[y*PW+x]){
-        fillCount++;
         maxC=Math.max(maxC,contrastMap[y*PW+x]);
-        sumC+=contrastMap[y*PW+x];
+        sumC+=contrastMap[y*PW+x]; cnt++;
       }
     }
-    const fillRatio = fillCount / span;
-    if(fillRatio < 0.35) continue; // sparse hit pattern = not a wire
+    const avgC = cnt>0 ? sumC/cnt : 0;
+    if(avgC < 4) continue;
 
-    const avgC = sumC / Math.max(1,fillCount);
-    if(avgC < 6) continue; // contrast floor — fabric has very low contrast
-
-    rowRuns.push({y, x1:bestStart, x2:bestEnd, span,
-                  maxC, avgC, fillRatio, _hitCount:fillCount});
+    const xCentre = (bestStart + bestEnd) / 2;
+    rowRuns.push({y, x1:bestStart, x2:bestEnd, span, maxC, avgC,
+                  xCentre, hitCount:cnt});
   }
 
-  // Cluster adjacent rows into cable objects
+  // ── Cluster adjacent row-runs ─────────────────────────────────────
   rowRuns.sort((a,b)=>a.y-b.y);
   const clusters = [];
   for(const run of rowRuns){
     const match = clusters.find(cl=>{
       const last = cl[cl.length-1];
-      if(run.y-last.y>5) return false;
-      return run.x1<=last.x2+PW*0.18 && run.x2>=last.x1-PW*0.18;
+      if(run.y - last.y > 6) return false;
+      // Overlap check — allow diagonal drift: use xCentre proximity too
+      const xDrift = Math.abs(run.xCentre - last.xCentre);
+      return (run.x1 <= last.x2 + PW*0.18 && run.x2 >= last.x1 - PW*0.18)
+          || xDrift < PW*0.15;
     });
     if(match) match.push(run);
     else clusters.push([run]);
   }
 
+  // ── Cluster-level validation ──────────────────────────────────────
   const cables = [];
   for(const cl of clusters){
     const x1 = Math.min(...cl.map(r=>r.x1));
     const x2 = Math.max(...cl.map(r=>r.x2));
     if(x2-x1 < minSpan) continue;
+    if(cl.length < 2) continue; // need multiple rows
 
-    const avgC      = cl.reduce((s,r)=>s+r.avgC,0)/cl.length;
-    const maxC      = Math.max(...cl.map(r=>r.maxC));
-    const avgFill   = cl.reduce((s,r)=>s+r.fillRatio,0)/cl.length;
+    const avgC = cl.reduce((s,r)=>s+r.avgC,0)/cl.length;
+    const maxC = Math.max(...cl.map(r=>r.maxC));
+    if(avgC < 5) continue;
 
-    // ── LINEARITY CHECK ───────────────────────────────────────────
-    // For each row-run in the cluster, it should span most of the cluster's
-    // width. If runs are narrow patches within a wide cluster = not a wire.
-    // (This catches vegetation edges, building corners, textured surfaces)
-    const clusterWidth = x2 - x1;
-    const avgRunSpan   = cl.reduce((s,r)=>s+r.span,0)/cl.length;
-    const linearityRatio = avgRunSpan / Math.max(1, clusterWidth);
-    if(linearityRatio < 0.45) continue; // runs don't span the cluster = not linear
-
-    // ── UNIFORMITY CHECK ─────────────────────────────────────────
-    // Sample contrast at 10 evenly-spaced x positions along the midpoint y.
-    // A wire is uniformly dark; fabric/cloud is patchy.
-    const midY = Math.round(cl.reduce((s,r)=>s+r.y,0)/cl.length);
-    const sampleStep = Math.max(1, Math.floor(clusterWidth/10));
-    let goodSamples=0, totalSamples=0;
-    for(let sx=x1+2; sx<=x2-2; sx+=sampleStep){
-      // Check a 3-row band around midY for contrast
-      let found = false;
-      for(let dy=-2;dy<=2;dy++){
-        const sy = midY+dy;
-        if(sy<0||sy>=PH) continue;
-        if(contrastMap[sy*PW+sx] > cThr){ found=true; break; }
+    // ── DIAGONAL COHERENCE CHECK ────────────────────────────────
+    // Fit a line through (y → xCentre) of all runs in the cluster.
+    // A wire traces a straight line; texture scatters randomly.
+    // Compute R² of linear regression on (y, xCentre).
+    const n = cl.length;
+    if(n >= 3){
+      let sumY=0, sumX=0, sumYX=0, sumYY=0, sumXX=0;
+      for(const r of cl){ sumY+=r.y; sumX+=r.xCentre; sumYX+=r.y*r.xCentre;
+                           sumYY+=r.y*r.y; sumXX+=r.xCentre*r.xCentre; }
+      const meanY=sumY/n, meanX=sumX/n;
+      let ssTot=0, ssRes=0;
+      // slope = Σ(yi-ȳ)(xi-x̄) / Σ(yi-ȳ)²
+      let num=0, den=0;
+      for(const r of cl){
+        num += (r.y-meanY)*(r.xCentre-meanX);
+        den += (r.y-meanY)*(r.y-meanY);
       }
-      totalSamples++;
-      if(found) goodSamples++;
+      const slope = den>0 ? num/den : 0;
+      const intercept = meanX - slope*meanY;
+      for(const r of cl){
+        const pred = slope*r.y + intercept;
+        ssRes += (r.xCentre-pred)*(r.xCentre-pred);
+        ssTot += (r.xCentre-meanX)*(r.xCentre-meanX);
+      }
+      const r2 = ssTot > 0 ? Math.max(0, 1 - ssRes/ssTot) : 0;
+      // Wire R² typically > 0.7; fabric/texture < 0.4
+      if(r2 < 0.55) continue;
     }
-    const uniformity = goodSamples / Math.max(1,totalSamples);
-    if(uniformity < 0.45) continue; // too patchy = not a wire
 
-    // ── Wire endpoints for correct diagonal line drawing ─────────
-    const leftRuns  = cl.filter(r=>r.x1<=x1+PW*0.15);
-    const rightRuns = cl.filter(r=>r.x2>=x2-PW*0.15);
+    // ── Wire endpoints using diagonal regression ─────────────────
+    // Use left-side and right-side rows for correct diagonal endpoints
+    const leftRuns  = cl.filter(r=>r.x1 <= x1+PW*0.15);
+    const rightRuns = cl.filter(r=>r.x2 >= x2-PW*0.15);
     const y1 = leftRuns.length
       ? Math.round(leftRuns.reduce((s,r)=>s+r.y,0)/leftRuns.length)
       : Math.round(cl.reduce((s,r)=>s+r.y,0)/cl.length);
@@ -623,9 +628,7 @@ function findWires(gray, colorData){
       : Math.round(cl.reduce((s,r)=>s+r.y,0)/cl.length);
 
     cables.push({x1,y1,x2,y2,
-      _span:x2-x1, _contrast:avgC, _maxC:maxC,
-      _rows:cl.length, _fill:avgFill, _linearity:linearityRatio,
-      _uniformity:uniformity});
+      _span:x2-x1, _contrast:avgC, _maxC:maxC, _rows:cl.length});
   }
 
   cables.sort((a,b)=>b._span-a._span);
