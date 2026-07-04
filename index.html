@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>APLAWS v5.2 — Active Power Line Advisory Warning System</title>
+<title>APLAWS v5 — Active Power Line Advisory Warning System v5.1</title>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Rajdhani:wght@500;600;700&display=swap');
 
@@ -152,7 +152,7 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:28px;heigh
   <div id="startup">
     <h1>APLAWS</h1>
     <p class="version">Active Power Line Advisory Warning System</p>
-    <p>v5.2 — Real-time powerline detection. Diagonal coherence filter: wires pass linear regression R²≥0.55, fabric/texture scatter rejected.</p>
+    <p>v5.1 — Single Threat Focus: alerts on the closest cable only for helicopter operations. Sky zone isolation, local contrast scanning, time-to-impact at 160kt, audio alerts.</p>
     <div class="warn-box">
       <p>⚠ PROTOTYPE — RESEARCH USE ONLY<br>
       Not certified for operational aviation use.<br>
@@ -176,7 +176,7 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:28px;heigh
   <div id="top-bar">
     <div class="logo">
       <div class="logo-dot" id="live-dot"></div>
-      APLAWS v5.2
+      APLAWS v5.1
     </div>
     <div id="status-badge" class="clear">CLEAR</div>
   </div>
@@ -235,12 +235,9 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:28px;heigh
 
 <script>
 // ═══════════════════════════════════════════════════════════════════
-// APLAWS v5.2 — Diagonal coherence filter
-// v5.1 over-filtered: row-level fill/gap tests eliminated thin wires.
-// v5.2: restore sensitive row-level detection (captures thin 1-2px wires),
-//   apply discrimination at CLUSTER level via linear regression R²:
-//   wire = straight diagonal line (R²>0.55), fabric = random scatter (R²<0.4).
-//   Also: gap tolerance 8px for diagonal wires, xCentre drift clustering.
+// APLAWS v5.1 — Complete clean rebuild
+// Core algorithm proven across 11+ test images in v4.9b
+// All v4.x lessons incorporated — see APLAWS_v5_briefing.md
 // ═══════════════════════════════════════════════════════════════════
 const PW=320, PH=240, SPEED_MS=82.3;
 
@@ -250,7 +247,7 @@ let lastTime=0, fpsSmooth=0, flashPhase=0;
 let flightMode='tol'; // default: T/O·LDG (flight starts on ground)
 let skyTop=0, skyBot=PH*0.6, skyValid=false;
 let cableHistory=[], lastSpeakTime=0, lastLevel='CLEAR';
-const HOLD_FRAMES=3;
+const HOLD_FRAMES=4;
 
 const video    = document.getElementById('video');
 const canvasP  = document.getElementById('canvas-proc');
@@ -304,7 +301,7 @@ function toggleDetection(){
     document.getElementById('live-dot').style.background='var(--clear)';
     if(animFrame) cancelAnimationFrame(animFrame);
     ctx.clearRect(0,0,canvasM.width,canvasM.height);
-    updateDisplay('CLEAR',[]);
+    updateDisplay('CLEAR',[],0);primaryThreat=null;primaryStableFrames=0;
   }
 }
 
@@ -365,9 +362,13 @@ function processFrame(timestamp){
   const rawCables = findWires(gray, imgData.data);
   const cables = temporalSmooth(rawCables);
 
-  renderOverlay(cables);
-  const level = scoreLevel(cables);
-  updateDisplay(level, cables);
+  // Single Threat Focus: display and alert on the CLOSEST wire only
+  const primary = selectPrimaryThreat(cables);
+  const displayed = primary ? [primary] : [];
+
+  renderOverlay(displayed, cables.length);
+  const level = primary ? (primary._zone||'ADVISORY') : 'CLEAR';
+  updateDisplay(level, displayed, cables.length);
   triggerAudio(level);
 }
 
@@ -454,55 +455,26 @@ function detectSkyZone(data){
   if(lbl) lbl.style.top=((skyTop*scY)+60)+'px';
 }
 
-// ── Wire Detection v5.2 ───────────────────────────────────────────
-// Key insight from v5.1 failure: thin wires at 320px resolution produce
-// VERY few contrast hits per row (wire is 1-2px wide). Row-level fill ratio
-// and hit-count filters eliminated real thin wires along with fabric noise.
-//
-// Correct approach: RELAX row-level filters (capture thin wires),
-// but STRENGTHEN cluster-level filters (reject texture/fabric blobs).
-//
-// The fundamental difference between a wire and fabric at cluster level:
-//
-// WIRE CLUSTER:
-//   - Many rows each contribute a short run at a CONSISTENT x-position
-//   - As wire is diagonal, x-position SHIFTS linearly with y (straight line)
-//   - Cluster is TALL (many rows) and NARROW (1-3px per row hit)
-//   - Run x-centres follow a linear trend (low residual from line fit)
-//
-// FABRIC/TEXTURE CLUSTER:
-//   - Many rows with wide scattered runs at RANDOM x-positions
-//   - No linear trend — x-centres jump around
-//   - Cluster tends to be WIDE with inconsistent run positions
-//   - High residual from any attempted line fit
-//
-// FILTERS APPLIED AT CLUSTER LEVEL:
-// 1. DIAGONAL COHERENCE: fit a line through (y, x_centre) of all runs.
-//    Require R² > 0.6. Wire = straight line; texture = random scatter.
-// 2. ROW DENSITY: cluster must span enough rows (≥3) to be a real wire,
-//    not a single bright/dark gradient hit.
-// 3. SPAN CHECK: cluster x-extent ≥ 15% of frame (restored from v5.0).
-// 4. CONTRAST FLOOR: avgC ≥ 5 (slightly raised from v5.0's implicit floor).
-//
-// Row-level: restored sensitive detection (p88≥95, cThr from sensitivity,
-// minimal gap tolerance) — capture even faint thin wires.
+// ── Wire Detection ────────────────────────────────────────────────
+// Local contrast: pixel darker than 7px neighbours = wire candidate
+// Proven across horizontal, diagonal, dusk, bright day, cloudy conditions
 function findWires(gray, colorData){
-  const sens    = parseInt(document.getElementById('sens-slider').value);
-  const cThr    = Math.max(4, 13-sens);  // restored proven v5.0 threshold
-  const minSpan = PW*0.15;              // restored 15% — thin wires span the frame
+  const sens   = parseInt(document.getElementById('sens-slider').value);
+  const cThr   = Math.max(4, 13-sens);   // contrast threshold
+  const minSpan = PW*0.15;               // minimum wire span px
 
   const wireMap     = new Uint8Array(PW*PH);
   const contrastMap = new Float32Array(PW*PH);
 
-  // ── Pixel-level contrast marking (unchanged proven core) ──────────
   for(let y=skyTop; y<=skyBot; y++){
-    if(y<28 || y>PH-10) continue;
+    if(y<28 || y>PH-10) continue; // skip status bar rows
 
+    // Row 88th-percentile brightness gate
     const rowPx = new Float32Array(PW);
     for(let x=0;x<PW;x++) rowPx[x]=gray[y*PW+x];
-    rowPx.sort();
-    const p88 = rowPx[Math.floor(PW*0.88)];
-    if(p88 < 95) continue; // restored to original — thin wires barely affect p88
+    const sortedPx = rowPx.slice().sort();
+    const p88 = sortedPx[Math.floor(PW*0.88)];
+    if(p88 < 100) continue; // background too dark
 
     for(let x=7; x<PW-7; x++){
       let bg=0;
@@ -513,122 +485,61 @@ function findWires(gray, colorData){
     }
   }
 
-  // ── Row run extraction — relaxed for thin wires ───────────────────
-  // A thin wire at 320px may only produce 2-5 contrast hits per row.
-  // Allow sparse runs but require minimum span still.
+  // Find row runs
   const rowRuns = [];
   for(let y=skyTop; y<=skyBot; y++){
     if(y<28||y>PH-10) continue;
-
-    // Find all hit positions
-    const hits = [];
+    let start=-1, maxC=0, sumC=0, n=0, gaps=0, lastX=-1;
     for(let x=0;x<PW;x++){
-      if(wireMap[y*PW+x]) hits.push(x);
-    }
-    if(hits.length < 2) continue;
-
-    // Find longest run allowing gaps up to 8px (diagonal wires skip pixels)
-    let bestStart=hits[0], bestEnd=hits[0], bestHits=1;
-    let curStart=hits[0], curEnd=hits[0], curHits=1;
-    for(let i=1;i<hits.length;i++){
-      if(hits[i]-curEnd <= 8){
-        curEnd=hits[i]; curHits++;
-      } else {
-        if(curHits>bestHits){ bestHits=curHits; bestStart=curStart; bestEnd=curEnd; }
-        curStart=hits[i]; curEnd=hits[i]; curHits=1;
-      }
-    }
-    if(curHits>bestHits){ bestHits=curHits; bestStart=curStart; bestEnd=curEnd; }
-
-    const span = bestEnd - bestStart + 1;
-    if(span < 8) continue; // minimum meaningful run
-
-    // Measure contrast along this run
-    let maxC=0, sumC=0, cnt=0;
-    for(let x=bestStart;x<=bestEnd;x++){
       if(wireMap[y*PW+x]){
+        if(start<0) start=x;
+        else if(x>lastX+2) gaps++;
         maxC=Math.max(maxC,contrastMap[y*PW+x]);
-        sumC+=contrastMap[y*PW+x]; cnt++;
+        sumC+=contrastMap[y*PW+x]; n++; lastX=x;
+      } else if(start>=0){
+        const span=x-start;
+        if(span>=6) rowRuns.push({y,x1:start,x2:x-1,span,maxC,avgC:n>0?sumC/n:0,gaps});
+        start=-1; maxC=0; sumC=0; n=0; gaps=0; lastX=-1;
       }
     }
-    const avgC = cnt>0 ? sumC/cnt : 0;
-    if(avgC < 4) continue;
-
-    const xCentre = (bestStart + bestEnd) / 2;
-    rowRuns.push({y, x1:bestStart, x2:bestEnd, span, maxC, avgC,
-                  xCentre, hitCount:cnt});
+    if(start>=0 && PW-start>=6)
+      rowRuns.push({y,x1:start,x2:PW-1,span:PW-start,maxC,avgC:n>0?sumC/n:0,gaps});
   }
 
-  // ── Cluster adjacent row-runs ─────────────────────────────────────
+  // Cluster adjacent rows into cable objects
   rowRuns.sort((a,b)=>a.y-b.y);
   const clusters = [];
   for(const run of rowRuns){
     const match = clusters.find(cl=>{
       const last = cl[cl.length-1];
-      if(run.y - last.y > 6) return false;
-      // Overlap check — allow diagonal drift: use xCentre proximity too
-      const xDrift = Math.abs(run.xCentre - last.xCentre);
-      return (run.x1 <= last.x2 + PW*0.18 && run.x2 >= last.x1 - PW*0.18)
-          || xDrift < PW*0.15;
+      if(run.y-last.y>5) return false;
+      return run.x1<=last.x2+PW*0.18 && run.x2>=last.x1-PW*0.18;
     });
     if(match) match.push(run);
     else clusters.push([run]);
   }
 
-  // ── Cluster-level validation ──────────────────────────────────────
+  // Build cable objects — no thickness filter (clouds inflate row counts)
   const cables = [];
   for(const cl of clusters){
     const x1 = Math.min(...cl.map(r=>r.x1));
     const x2 = Math.max(...cl.map(r=>r.x2));
     if(x2-x1 < minSpan) continue;
-    if(cl.length < 2) continue; // need multiple rows
 
     const avgC = cl.reduce((s,r)=>s+r.avgC,0)/cl.length;
     const maxC = Math.max(...cl.map(r=>r.maxC));
-    if(avgC < 5) continue;
 
-    // ── DIAGONAL COHERENCE CHECK ────────────────────────────────
-    // Fit a line through (y → xCentre) of all runs in the cluster.
-    // A wire traces a straight line; texture scatters randomly.
-    // Compute R² of linear regression on (y, xCentre).
-    const n = cl.length;
-    if(n >= 3){
-      let sumY=0, sumX=0, sumYX=0, sumYY=0, sumXX=0;
-      for(const r of cl){ sumY+=r.y; sumX+=r.xCentre; sumYX+=r.y*r.xCentre;
-                           sumYY+=r.y*r.y; sumXX+=r.xCentre*r.xCentre; }
-      const meanY=sumY/n, meanX=sumX/n;
-      let ssTot=0, ssRes=0;
-      // slope = Σ(yi-ȳ)(xi-x̄) / Σ(yi-ȳ)²
-      let num=0, den=0;
-      for(const r of cl){
-        num += (r.y-meanY)*(r.xCentre-meanX);
-        den += (r.y-meanY)*(r.y-meanY);
-      }
-      const slope = den>0 ? num/den : 0;
-      const intercept = meanX - slope*meanY;
-      for(const r of cl){
-        const pred = slope*r.y + intercept;
-        ssRes += (r.xCentre-pred)*(r.xCentre-pred);
-        ssTot += (r.xCentre-meanX)*(r.xCentre-meanX);
-      }
-      const r2 = ssTot > 0 ? Math.max(0, 1 - ssRes/ssTot) : 0;
-      // Wire R² typically > 0.7; fabric/texture < 0.4
-      if(r2 < 0.55) continue;
-    }
+    // ── Wire endpoints for line drawing ───────────────────────────
+    // Find the y-position at the left and right ends of the wire
+    // This correctly captures diagonal wires (not just horizontal midpoint)
+    const leftRuns  = cl.filter(r=>r.x1<=x1+PW*0.15);
+    const rightRuns = cl.filter(r=>r.x2>=x2-PW*0.15);
+    const y1 = leftRuns.length  ? Math.round(leftRuns.reduce((s,r)=>s+r.y,0)/leftRuns.length)
+                                 : Math.round(cl.reduce((s,r)=>s+r.y,0)/cl.length);
+    const y2 = rightRuns.length ? Math.round(rightRuns.reduce((s,r)=>s+r.y,0)/rightRuns.length)
+                                : Math.round(cl.reduce((s,r)=>s+r.y,0)/cl.length);
 
-    // ── Wire endpoints using diagonal regression ─────────────────
-    // Use left-side and right-side rows for correct diagonal endpoints
-    const leftRuns  = cl.filter(r=>r.x1 <= x1+PW*0.15);
-    const rightRuns = cl.filter(r=>r.x2 >= x2-PW*0.15);
-    const y1 = leftRuns.length
-      ? Math.round(leftRuns.reduce((s,r)=>s+r.y,0)/leftRuns.length)
-      : Math.round(cl.reduce((s,r)=>s+r.y,0)/cl.length);
-    const y2 = rightRuns.length
-      ? Math.round(rightRuns.reduce((s,r)=>s+r.y,0)/rightRuns.length)
-      : Math.round(cl.reduce((s,r)=>s+r.y,0)/cl.length);
-
-    cables.push({x1,y1,x2,y2,
-      _span:x2-x1, _contrast:avgC, _maxC:maxC, _rows:cl.length});
+    cables.push({x1,y1,x2,y2, _span:x2-x1, _contrast:avgC, _maxC:maxC, _rows:cl.length});
   }
 
   cables.sort((a,b)=>b._span-a._span);
@@ -655,6 +566,69 @@ function temporalSmooth(newCables){
   return all.slice(0,6);
 }
 
+// ── Single Threat Focus ───────────────────────────────────────────
+// Aviation warning system principle (TCAS/EGPWS): alert on THE most
+// critical threat only. Multiple wires in view = focus on the CLOSEST.
+// Benefits:
+//  - Pilot gets one clear threat + one clear response, not visual clutter
+//  - False positive noise rarely wins the proximity score, so scattered
+//    misdetections are naturally suppressed
+//  - The closest wire is the one that will kill you — the rest can wait
+//
+// Additional stability: require the primary threat to persist across
+// frames. A single-frame noise blip that momentarily scores highest
+// doesn't steal focus from a consistently-tracked wire.
+let primaryThreat=null;      // currently focused wire
+let primaryStableFrames=0;   // how long current primary has held
+
+function selectPrimaryThreat(cables){
+  if(!cables.length){
+    primaryThreat=null;
+    primaryStableFrames=0;
+    return null;
+  }
+
+  // Candidate: highest proximity score (closest)
+  const candidate = cables[0]; // already sorted by proxScore desc
+
+  if(primaryThreat){
+    // Is the candidate the same wire we're already tracking?
+    const sameWire =
+      Math.abs((candidate.y1+candidate.y2)/2-(primaryThreat.y1+primaryThreat.y2)/2)<20 &&
+      Math.abs(candidate.x1-primaryThreat.x1)<PW*0.25;
+
+    if(sameWire){
+      // Update tracked wire with fresh position
+      primaryThreat=candidate;
+      primaryStableFrames++;
+      return primaryThreat;
+    }
+
+    // Different wire wants focus — only switch if it's decisively closer
+    // (hysteresis prevents flicker between two similar wires)
+    if((candidate._proxScore||0) > (primaryThreat._proxScore||0)+0.08){
+      primaryThreat=candidate;
+      primaryStableFrames=1;
+      return primaryThreat;
+    }
+
+    // Keep existing primary if it still exists in current detections
+    const stillThere = cables.find(c=>
+      Math.abs((c.y1+c.y2)/2-(primaryThreat.y1+primaryThreat.y2)/2)<20 &&
+      Math.abs(c.x1-primaryThreat.x1)<PW*0.25);
+    if(stillThere){
+      primaryThreat=stillThere;
+      primaryStableFrames++;
+      return primaryThreat;
+    }
+  }
+
+  // No existing primary or it vanished — adopt candidate
+  primaryThreat=candidate;
+  primaryStableFrames=1;
+  return primaryThreat;
+}
+
 // ── Proximity Scoring at 160kt ────────────────────────────────────
 function scoreProximity(c){
   const sr = Math.max(1, skyBot-skyTop);
@@ -675,7 +649,7 @@ function scoreProximity(c){
 // ── Render Overlay ────────────────────────────────────────────────
 // v5 KEY FIX: draws actual coloured lines on the wire positions
 // using correct diagonal endpoints (x1,y1)→(x2,y2)
-function renderOverlay(cables){
+function renderOverlay(cables, totalCount){
   const W=canvasM.width, H=canvasM.height;
   const sx=W/PW, sy=H/PH;
   ctx.clearRect(0,0,W,H);
@@ -724,12 +698,15 @@ function renderOverlay(cables){
     ctx.fillText(label, lx-tw/2, ly);
   }
 
-  // Cable count
+  // Count indicator: shows focus status when multiple wires present
   if(cables.length>0){
     ctx.font = '500 11px "Share Tech Mono",monospace';
     ctx.fillStyle = 'rgba(0,255,159,0.6)';
-    ctx.fillText(cables.length+' CABLE'+(cables.length>1?'S':'')+' DETECTED',
-      14, H-200);
+    const extra = (totalCount||1) - 1;
+    const txt = extra>0
+      ? 'CLOSEST CABLE — '+extra+' MORE IN VIEW'
+      : 'CABLE TRACKED';
+    ctx.fillText(txt, 14, H-200);
   }
 }
 
@@ -741,12 +718,14 @@ function scoreLevel(cables){
 }
 
 // ── Display Update ────────────────────────────────────────────────
-function updateDisplay(level, cables){
+function updateDisplay(level, cables, totalCount){
   const worst = cables.length
     ? cables.reduce((b,c)=>(c._proxScore||0)>(b._proxScore||0)?c:b, cables[0])
     : null;
 
-  document.getElementById('m-cables').textContent = cables.length;
+  // Show TOTAL wires in view (situational awareness) even though
+  // only the closest is displayed and driving alerts
+  document.getElementById('m-cables').textContent = totalCount!==undefined?totalCount:cables.length;
   const ttiEl = document.getElementById('m-tti');
   ttiEl.textContent = worst?worst._tti:'--';
   ttiEl.className = 'val '+(level==='IMMINENT'||level==='CRITICAL'?'red':
